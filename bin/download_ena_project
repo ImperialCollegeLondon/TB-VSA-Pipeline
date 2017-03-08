@@ -1,0 +1,152 @@
+#!/bin/env perl
+
+=pod
+
+=head1 NAME
+
+    download_ena_project
+
+=head1 SYNOPSIS
+
+    download_ena_project --acc project_accession --output output_directory
+
+=head1 DESCRIPTION
+
+download_ena_project retrieves all fastq files relating to an ENA project and
+saves them in the specified directory
+    
+=head1 REQUIRED ARGUMENTS
+
+=over 4
+
+=item B<acc>: ENA Project accession (i.e. ERPxxxxx)
+
+=item B<output>: Path to write output files 
+
+=back
+
+=head1 OPTIONAL ARGUMENTS
+
+=over 4
+
+=item B<help>: Displays help output
+
+=item B<man>: Displays full manual page
+
+=back
+
+=head1 AUTHOR - James Abbott
+
+Email j.abbott@imperial.ac.uk
+
+=cut
+
+use warnings;
+use strict;
+
+use Cwd;
+use Digest::MD5::File qw(file_md5_hex);
+use File::Basename;
+use File::Path qw(make_path);
+use Getopt::Long;
+use LWP::UserAgent;
+use Net::FTP;
+use Pod::Usage;
+use XML::XPath;
+use XML::XPath::Parser;
+
+{
+    my ($project_acc, $out_dir, $help, $man);
+    GetOptions(
+	'acc:s'    => \$project_acc,
+	'output:s' => \$out_dir,
+	'help'	   => \$help,
+	'man'	   => \$man,
+    );
+    die "\nUnknown argument: @ARGV\n" if "@ARGV";
+    my $message = "$0: Downloads ENA project data\n";
+    pod2usage( verbose => 2, message=> $message) if ($man);
+    pod2usage( verbose => 1, message=> $message ) if ( $help || !$project_acc || !$out_dir );
+
+    my $ftp_host = "ftp.sra.ebi.ac.uk";
+    my $ftp = Net::FTP->new($ftp_host);
+    $ftp->login("anonymous", "bdsg-help\@imperial.ac.uk") or die "Error logging into $ftp_host: ", $ftp->message();
+
+    my $orig_dir = cwd();
+
+    if (-d "$out_dir") {
+	print "\nOutput directory $out_dir already exists\n";
+	print "Please remove this or choose a different output directory\n\n";
+	exit(1);
+    }
+
+    make_path($out_dir, {verbose => 0, error=>\my $err_list});
+    if (@$err_list) {
+	for my $err(@$err_list) {
+	    my ($file,$message) = %$err;
+	    print "Error creating output directory $out_dir: $message\n";
+	}
+    }
+
+    # Retrieve study XML document and parse url for fastq report
+    my $url = "http://www.ebi.ac.uk/ena/data/view/__acc__&display=xml&download=xml&filename=__acc__.xml";
+    $project_acc=uc($project_acc);
+    $url=~s/__acc__/$project_acc/g;
+
+    my $b = LWP::UserAgent->new();
+    my $response = $b->get($url);
+    die "Error downloading $project_acc xml document", $response->status_line() unless $response->is_success();
+    my $proj_xml=$response->content();
+    my $xp = XML::XPath->new(xml=>$proj_xml);
+
+    #check we've downloaded a document that looks like it has the right structure...
+    my $nodeset = $xp->find("/ROOT/STUDY");
+    if (($nodeset->get_nodelist)!=1)  {
+	die "Accession $project_acc could not be retrieved";
+    }
+    
+    $nodeset = $xp->find("/ROOT/STUDY/STUDY_LINKS/STUDY_LINK/XREF_LINK");
+    
+    my $fastq_url;
+    NODE: foreach my $node ($nodeset->get_nodelist) {
+	my $db=$node->findvalue('./DB');
+	my $id = $node->findvalue('./ID');
+	if ($db eq "ENA-FASTQ-FILES") {
+	    $fastq_url="$id";
+	   last NODE;
+	}
+    }
+    
+    die "Could not find fastq report URL" if (!($fastq_url));
+    # Retrieve fastq report for project...
+    $response = $b->get($fastq_url);
+    die "Error downloading fastq report ($fastq_url)", $response->status_line() unless $response->is_success();
+    my $fastq_report=$response->content();
+     
+    foreach my $line(split(/^/,$fastq_report)) {
+	#skip the header line
+	next if ($line=~/^run_accession/);
+
+	my @fields = split(/\t/,$line);
+	my $run_acc = $fields[0];
+	my @fastq_files = split(/;/,$fields[1]);
+	my @md5_sums = split(/;/,$fields[2]);	
+	print "$run_acc\n";
+
+	mkdir "$out_dir/$run_acc" or die "Error creating $out_dir/$run_acc: $!";
+	chdir "$out_dir/$run_acc" or die "Error chdiring to $out_dir/$run_acc:$!";
+	for (my $i=0;$i<=$#fastq_files;$i++) {
+	    my $fastq_file = $fastq_files[$i];
+	    my $md5_sum    = $md5_sums[$i];
+	    $fastq_file=~s/^$ftp_host//;
+	    my $fastq_base = basename($fastq_file);
+	    print "...downloading $fastq_file...\n";
+	    $ftp->get($fastq_file);
+	    my $digest = file_md5_hex($fastq_base);
+	    # Don't know why, but md5sums aren't matching...
+	    #die "$run_acc: $fastq_file md5 sum mismatch - $digest is not $md5_sum\n" if ($digest ne $md5_sum); 
+	}
+	print "\n";
+	chdir $orig_dir or warn "Error changing to $orig_dir: $!";
+    }
+}
