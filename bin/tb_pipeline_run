@@ -1,0 +1,46 @@
+#!/bin/bash -e
+
+# Wrapper for running tb pipline scripts 'analyse_tb_sample' on cx1,
+# intended to be submitted using 'submit_tb_run' which will determine
+# the size of the array job based on evaluation of the input data
+
+# If submitted manually, a '-J' argument will need to be added to the 
+# qsub line
+
+# A series of variables need to set in the environment under which this script
+# is run (normally handled by PBS from -v args)
+
+# bin_dir: directory containing analyse_tb_sample script
+# in_dir: directory containing input sample directories
+# out_dir: directory for outputs
+# ref: path to bwa-indexed reference fasta file 
+
+# JCA 210317
+
+if [ -z ${bin_dir} ];
+then
+    echo bin_dir variable not set
+    exit 1
+fi
+
+if [ -z ${in_dir} ];
+then
+    echo in_dir variable not set
+    exit 1
+fi
+
+if [ -z ${out_dir} ];
+then
+    echo out_dir variable not set
+    exit 1
+fi
+
+if [ -z ${ref} ];
+then
+    echo ref variable not set
+    exit 1
+fi
+
+echo "Running command: ${bin_dir}/analyse_tb_sample --input $in_dir --output ${out_dir} --reference ${ref}"
+${bin_dir}/analyse_tb_sample --input $in_dir --output ${out_dir} --reference ${ref}
+
