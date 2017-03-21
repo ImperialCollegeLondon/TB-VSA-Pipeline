@@ -17,6 +17,12 @@
 
 # JCA 210317
 
+#PBS -l select=1:ncpus=20:mem=64gb
+#PBS -l walltime=01:00:00
+#PBS -q med-bio
+#PBS -j oe
+
+
 if [ -z ${bin_dir} ];
 then
     echo bin_dir variable not set
