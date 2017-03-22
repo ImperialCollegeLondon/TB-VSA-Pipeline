@@ -1,5 +1,7 @@
 #!/bin/perl
 
+#TODO: update to use central vt installation when available...
+#
 use FindBin;
 use lib "$FindBin::Bin/../lib/perl5";
 
@@ -54,7 +56,7 @@ use Pod::Usage;
 use Env::Modulecmd('bio-bwa/0.7.15');
 use Env::Modulecmd('cutadapt/1.10');
 use Env::Modulecmd('fastqc/0.11.2');
-use Env::Modulecmd('freebayes/0.9.21');
+use Env::Modulecmd('freebayes/1.1.0');
 use Env::Modulecmd('gatk/3.6');
 use Env::Modulecmd('picard/2.6.0');
 use Env::Modulecmd('sambamba/0.6.5');
@@ -387,12 +389,14 @@ sub call_snvs {
     # -p 1: ploidy = 1
     # -i  : no indels
     # -X  : no mnps
+    # -u  : no complex
     # -j  : use mapping quality
     # -0  : standard quality filters - min mapping quality 30; min base quality 20;
     #       min supporting allele qsum 0; genotype variant thereshold 0
     # -F  : min alternate fraction 0.8 (need min 80% calls supporting variant)
 
-    my $cmd = "freebayes -p 1 -i -X -j -0 -F 0.8 -f $reference $bam_file -v $out_dir/$sample.vcf";
+    my $cmd = "freebayes -p 1 -i -X -u -j -0 -F 0.8 -f $reference $bam_file";
+    $cmd .= "|/home/jamesa/vt/vt normalize -r $reference - > $out_dir/$sample.vcf";
     run_cmd($cmd);
 
     return (0)
