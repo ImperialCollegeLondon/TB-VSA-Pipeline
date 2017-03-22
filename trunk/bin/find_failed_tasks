@@ -1,0 +1,121 @@
+#!/bin/perl
+
+use FindBin;
+use lib "$FindBin::Bin/../lib/perl5";
+
+=pod
+
+=head1 NAME
+
+    find_failed_tasks
+
+=head1 SYNOPSIS
+
+    find_failed_tasks --input input_directory --output output_directory 
+
+=head1 DESCRIPTION
+
+    Identifies any tasks of a pipeline run which have not completed fully,
+    based on the absence of a ".all_done" flag in the output directory.
+
+    Any failing tasks should have their STDOUT/STDERR logs examined to 
+    identify the cause before rerunning 'find_failed_tasks' with the 
+    '--clean' argument and resubmitting the pipeline job. 
+    
+=head1 REQUIRED ARGUMENTS
+
+=over 4
+
+=item B<input>: Path to directory containing subdirs of sequence reads, 1 per sample
+
+=item B<output>: Path to write output files 
+
+=back
+
+=head1 OPTIONAL ARGUMENTS
+
+=over 4
+
+=item B<clean>: Remove output directories for any failed tasks
+
+=back
+
+=head1 AUTHOR - James Abbott
+
+Email j.abbott@imperial.ac.uk
+
+=cut
+
+use warnings;
+use strict;
+
+use Getopt::Long;
+use Pod::Usage;
+use File::Path qw(remove_tree);
+
+{
+    my ( $in_dir, $out_dir, $clean, $help, $man );
+    GetOptions(
+                'input:s'  => \$in_dir,
+                'output:s' => \$out_dir,
+                'clean'    => \$clean,
+                'help'     => \$help,
+                'man'      => \$man,
+              );
+    die "\nUnknown argument: @ARGV\n" if "@ARGV";
+    my $message = "$0: Identifies any failed analysis tasks of a pipeline run";
+    pod2usage( verbose => 2, message => $message ) if ($man);
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$out_dir );
+
+    opendir IN, $in_dir or die "Error: Could not open $in_dir: $!";
+    my @samples = grep !/\.\.?\z/, readdir IN;
+    close IN;
+
+    my $count = scalar(@samples);
+    print "\nFound $count samples...\n\n";
+
+    my @failures;
+    for ( my $i = 0 ; $i < $count ; $i++ ) {
+        my $sample = $samples[$i];
+        if ( !-e "$out_dir/$sample/$sample.all_done" ) {
+            push @failures, $i + 1;
+        }
+    }
+
+    if ( scalar(@failures) ) {
+        if ($clean) {
+            print "\nRemoving outputs from failed tasks...\n";
+            foreach my $failure (@failures) {
+                my $sample = $samples[ $failure - 1 ];
+		my $err_list;
+                remove_tree(
+                             "$out_dir/$sample",
+			    {
+				verbose => 0,
+                                error => \$err_list,
+                             }
+                           );
+                if (@$err_list) {
+                    for my $diag (@$err_list) {
+                        my ( $file, $message ) = %$diag;
+                        if ( $file eq '' ) {
+                            print "general error: $message\n";
+                        }
+                        else {
+                            print "problem unlinking $file: $message\n";
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            print "\nPlease check the following tasks outputs for errors:\n";
+            foreach my $failure (@failures) {
+                print "\ttask $failure: Sample $samples[$failure-1]\n";
+            }
+        }
+    } else {
+	print "all completed ok\n\n";
+    }
+
+}
