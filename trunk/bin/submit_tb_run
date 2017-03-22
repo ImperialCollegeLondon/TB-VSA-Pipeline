@@ -7,7 +7,8 @@
 # JCA 210317
 
 usage="Usage: $0 -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference"
-bin_dir=$(dirname $0)
+real_path=$(realpath $0)
+bin_dir=$(dirname ${real_path})
 
 while getopts ":i:o:r:h" opt; do
         case $opt in 
