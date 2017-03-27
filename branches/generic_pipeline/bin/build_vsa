@@ -1,0 +1,169 @@
+#!/usr/bin/perl
+
+=pod
+
+=head1 NAME
+
+    build_vsa
+
+=head1 SYNOPSIS
+
+    build_vsa --input analysis_out_dir --output output alignment --reference /path/to/reference.fasta [--exclude /path/to/bedfile]
+
+=head1 DESCRIPTION
+
+Creates a variable-site alignment from a series of vcf files contained in
+per-sample directories.  Hyper-variable regions to be excluded from the
+alignment can be provided in a bed file using the '--exclude' argument.
+ 
+=head1 REQUIRED ARGUMENTS
+
+=over 4
+
+=item B<input>: Path to directory containing per-sample directories, with a vcf file named 'sample_name.vcf' in each directory
+
+=item B<reference>: Path to fasta formatted reference sequence.
+
+=item B<output>: Path to write output alignment file
+
+=back
+
+=head1 OPTIONAL ARGUMENTS
+
+=over 4
+
+=item B<exclude>: Path to bed file of regions to exclude
+
+=back
+
+=head1 AUTHOR - James Abbott
+
+Email j.abbott@imperial.ac.uk
+
+=cut
+
+use warnings;
+use strict;
+
+use FindBin;
+
+use lib "$FindBin::Bin/../lib/perl5";
+
+use Getopt::Long;
+use Pod::Usage;
+use Bio::SeqIO;
+use Data::Dumper;
+
+{
+    my ( $in_dir, $reference, $out_dir, $exclude, $help, $man );
+    GetOptions(
+                'input:s'     => \$in_dir,
+                'reference:s' => \$reference,
+                'output:s'    => \$out_dir,
+                'exclude:s'   => \$exclude,
+                'help'        => \$help,
+                'man'         => \$man,
+              );
+    die "\nUnknown argument: @ARGV\n" if "@ARGV";
+    my $message = "$0: Aligns and variant calls reads for a TB genome\n";
+    pod2usage( verbose => 2, message => $message ) if ($man);
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$reference || !$out_dir );
+
+    die "$in_dir does not exist"    unless ( -d $in_dir );
+    die "$reference does not exist" unless ( -e $reference );
+    die "$exclude does not exist"   unless ( defined($exclude) && -e $exclude );
+
+    my $refIO     = Bio::SeqIO->new( -file => $reference, -format => 'fasta' );
+    my $ref       = $refIO->next_seq();
+    my @ref_bases = split( //, $ref->seq() );
+
+    # @variants is for storing counts of variants at each locus
+    my @variants = ("0") x scalar(@ref_bases);
+
+    # @exclude is for tracking loci which should not be represented
+    # in the variable site alignment
+    my @exclude = ("0") x scalar(@ref_bases);
+    open EXCLUDE, $exclude or die "Error opening $exclude: $!";
+    while ( my @exclude_fields = split( /\t/, <EXCLUDE> ) ) {
+        for ( my $i = $exclude_fields[1] - 1 ; $i <= $exclude_fields[2] - 1 ; $i++ ) {
+            $exclude[$i] = 1;
+        }
+    }
+    close EXCLUDE;
+
+    my $varlocs =
+      {};    # hash keyed on sample id, each containing array representing reference bases to store identified variants
+    my $sample_vars = {};    # hash keyed on sample id, each entry containing line of vsa
+    my %index;               # ordered list of variant loci base positions
+
+    opendir IN, $in_dir or die "Error opening $in_dir: $!";
+    my @samples = grep !/\.\.?\z/, readdir IN;
+    close IN;
+
+    foreach my $sample (@samples) {
+        print "reading sample $sample...\n";
+        if ( ( -d "$in_dir/$sample" ) && ( -e "$in_dir/$sample/$sample.vcf" ) ) {
+
+            open VCF, "$in_dir/$sample/$sample.vcf" or die "Error opening $in_dir/$sample/$sample.vcf: $!";
+            my @sample_loci;
+            while ( my $line = <VCF> ) {
+                next if ( $line =~ /^#/ );
+                my @fields = split( /\t/, $line );
+
+                my %info = map { split /=/ }
+                  map { split /;/ } $fields[7];
+
+                my $pos = $fields[1];
+                my $ref = $fields[3];
+                my $alt = $fields[4];
+
+                if ( $info{'TYPE'} eq 'snp' ) {
+                    if ( $ref_bases[ $pos - 1 ] eq $ref ) {
+                        $sample_loci[ $pos - 1 ] = $alt;
+                        $variants[ $pos - 1 ]++;
+                    }
+                    else {
+                        die "Error: ref allele ($ref) does not match reference",
+                          "($ref_bases[$pos-1])\ntype = $info{'TYPE'}\n$line";
+                    }
+                }
+            }
+            $varlocs->{$sample} = \@sample_loci;
+            close VCF;
+        }
+        else {
+            die "No VCF file found in $in_dir/$sample...\n";
+        }
+    }
+
+    #iterate through variants array to find variant loci....
+    for ( my $i = 0 ; $i < $#variants ; $i++ ) {
+
+        # only include bases which are indicated as being varient, but not in the exclude list
+        if ( $variants[$i] > 0 && $exclude[$i] == 0 ) {
+            my $ref_allele = $ref_bases[$i];
+            foreach my $sample (@samples) {
+                $index{ $i + 1 }++;
+                my $sample_allele = $varlocs->{$sample}->[$i];
+                ( defined($sample_allele) )
+                  ? ( $sample_vars->{$sample} .= $sample_allele )
+                  : ( $sample_vars->{$sample} .= $ref_allele );
+            }
+        }
+    }
+
+    open OUT, ">$out_dir/variable_site_alignment.txt" or die "Error opening $out_dir/variable_site_alignment.txt: $!";
+    foreach my $sample (@samples) {
+        print OUT "$sample\t$sample_vars->{$sample}\n";
+    }
+    close OUT;
+
+    open INDEX, ">$out_dir/variable_site_alignment.index"
+      or die "Error opening $out_dir/variable_site_alignment.index: $!";
+    my $count = 1;
+    print INDEX "Alignment Position\tReference location\n";
+    foreach my $pos ( sort { $a <=> $b } keys(%index) ) {
+        print INDEX $count++, "\t$pos\n";
+    }
+    close INDEX;
+}

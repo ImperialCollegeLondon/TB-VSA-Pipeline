@@ -1,0 +1,73 @@
+#!/bin/bash -e
+
+# Script to submit tb_pipeline_run as an array job 
+# Sizes job automatically based on the number of input data directories
+# filenames etc. are passed as variables with qsub's -v argument 
+
+# JCA 210317
+
+usage="Usage: $0 -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference"
+real_path=$(realpath $0)
+bin_dir=$(dirname ${real_path})
+
+while getopts ":i:o:r:h" opt; do
+        case $opt in 
+                i)
+                in_dir=$OPTARG
+                ;;
+		o)
+		out_dir=$OPTARG
+		;;
+		r)
+		ref=$OPTARG
+		;;
+                h)
+                echo $usage
+                exit 0
+                ;;
+                \?)
+                echo "Invalid option: -$OPTARG" >&2
+                echo $usage >&2
+                exit 1
+                ;;
+        esac
+done
+shift $((OPTIND-1))
+
+if [ -z ${in_dir} ] || [ -z ${out_dir} ] || [ -z $ref} ]; 
+then
+    echo $usage
+    exit 1
+fi
+
+if ! [ -d ${in_dir} ]; 
+then
+    echo ${in_dir} does not exist
+    exit 1
+fi;
+
+if ! [ -d ${out_dir} ];
+then
+    echo 
+    echo "Creating output directory ${out_dir}"
+    mkdir -v -p ${out_dir}
+fi;
+
+if ! [ -e ${ref} ];
+then
+    echo "Reference ${ref} does not exist"
+    exit 1
+fi;
+
+sample_count=$(ls -1 ${in_dir}|wc -l)
+
+echo
+echo "running command: qsub -J 1-${sample_count}:1 ${bin_dir}/tb_pipeline_run -i ${in_dir} -o ${out_dir} -r ${ref}"
+echo
+
+job_id=$(qsub -J 1-${sample_count}:1 -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${ref} ${bin_dir}/tb_pipeline_run)
+
+echo 
+echo "Array job ${job_id} submitted with ${sample_count} samples..."
+echo
+
