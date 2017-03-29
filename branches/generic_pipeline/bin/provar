@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
-# Wrapper for running tb pipline scripts 'analyse_tb_sample' on cx1,
-# intended to be submitted using 'submit_tb_run' which will determine
+# Wrapper for running bacterial variation pipline scripts 'analyse_sample' on cx1,
+# intended to be submitted using 'submit_run' which will determine
 # the size of the array job based on evaluation of the input data
 
 # If submitted manually, a '-J' argument will need to be added to the 
@@ -47,6 +47,6 @@ then
     exit 1
 fi
 
-echo "Running command: ${bin_dir}/analyse_sample --input $in_dir --output ${out_dir} --reference ${ref}"
-${bin_dir}/analyse_sample --input $in_dir --output ${out_dir} --reference ${ref}
+echo "Running command: ${bin_dir}/provar_sample --input $in_dir --output ${out_dir} --reference ${ref}"
+${bin_dir}/provar_sample --input $in_dir --output ${out_dir} --reference ${ref}
 

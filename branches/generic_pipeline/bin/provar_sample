@@ -387,15 +387,12 @@ sub call_snvs {
 
     # Freebayes arguments for generating SNV calls only :
     # -p 1: ploidy = 1
-    # -i  : no indels
-    # -X  : no mnps
-    # -u  : no complex
     # -j  : use mapping quality
     # -0  : standard quality filters - min mapping quality 30; min base quality 20;
     #       min supporting allele qsum 0; genotype variant thereshold 0
     # -F  : min alternate fraction 0.8 (need min 80% calls supporting variant)
 
-    my $cmd = "freebayes -p 1 -i -X -u -j -0 -F 0.8 -f $reference $bam_file";
+    my $cmd = "freebayes -p 1 -j -0 -F 0.8 -f $reference $bam_file";
     $cmd .= "|/home/jamesa/vt/vt normalize -r $reference - > $out_dir/$sample.vcf";
     run_cmd($cmd);
 

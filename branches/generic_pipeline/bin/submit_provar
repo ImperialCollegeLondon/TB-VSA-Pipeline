@@ -10,6 +10,10 @@ usage="Usage: $0 -i /path/to/input/dir -o /path/to/output/dir -r /path/to/refere
 real_path=$(realpath $0)
 bin_dir=$(dirname ${real_path})
 
+module load bio-bwa/0.7.15
+module load samtools/1.3.1
+module load picard/2.6.0
+
 while getopts ":i:o:r:h" opt; do
         case $opt in 
                 i)
@@ -59,13 +63,38 @@ then
     exit 1
 fi;
 
+if ! [ -e "${ref}.bwt" ];
+then
+    echo
+    echo "Building BWA index...";
+    echo
+    bwa index ${ref}
+fi
+
+if ! [ -e "${ref}.fai" ];
+then
+    echo
+    echo "Building fasta index...";
+    echo
+    samtools faidx ${ref}
+fi
+
+base=$(basename -s .fa ${ref})
+if ! [ -e "${base}.dict" ];
+then
+    echo
+    echo "Building fasta dictionary...";
+    echo
+    picard CreateSequenceDictionary R=${ref} O=${base}.dict
+fi
+
 sample_count=$(ls -1 ${in_dir}|wc -l)
 
 echo
-echo "running command: qsub -J 1-${sample_count}:1 ${bin_dir}/tb_pipeline_run -i ${in_dir} -o ${out_dir} -r ${ref}"
+echo "running command: qsub -J 1-${sample_count}:1 ${bin_dir}/provar -i ${in_dir} -o ${out_dir} -r ${ref}"
 echo
 
-job_id=$(qsub -J 1-${sample_count}:1 -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${ref} ${bin_dir}/tb_pipeline_run)
+job_id=$(qsub -J 1-${sample_count}:1 -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${ref} ${bin_dir}/provar)
 
 echo 
 echo "Array job ${job_id} submitted with ${sample_count} samples..."
