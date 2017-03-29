@@ -1,8 +1,0 @@
-#!/bin/bash
-
-#PBS -l ncpus=1
-#PBS -l mem=16Gb
-#PBS -l walltime=36:00:00
-
-/groupvol/med-bio/jamesa/colijn/tb_pipeline/bin/download_ena_project --acc ERP003508 --output /groupvol/med-bio/jamesa/colijn/reads/ERP003508
-

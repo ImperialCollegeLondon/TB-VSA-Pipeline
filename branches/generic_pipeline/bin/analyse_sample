@@ -9,15 +9,15 @@ use lib "$FindBin::Bin/../lib/perl5";
 
 =head1 NAME
 
-    analyse_tb_sample
+    analyse_sample
 
 =head1 SYNOPSIS
 
-    analyse_tb_sample --input input_directory --output output_directory --reference /path/to/reference.fasta
+    analyse_sample --input input_directory --output output_directory --reference /path/to/reference.fasta
 
 =head1 DESCRIPTION
 
-Carries out read alignment and variant calling on a TB genome sequence.
+Carries out read alignment and variant calling on a bacterial genome sequence.
 Intended to be run under PBS where a batch of samples are submitted as an array
 job. The read sequences should be arranged in a directory containing a
 subdirectory for each sample, each of which contains the reads for the sample.
@@ -75,7 +75,7 @@ our $threads = 20;
                 'man'         => \$man,
               );
     die "\nUnknown argument: @ARGV\n" if "@ARGV";
-    my $message = "$0: Aligns and variant calls reads for a TB genome\n";
+    my $message = "$0: Aligns and variant calls reads for a bacterial genome\n";
     pod2usage( verbose => 2, message => $message ) if ($man);
     pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$reference || !$out_dir );
 

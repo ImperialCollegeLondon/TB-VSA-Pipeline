@@ -47,6 +47,6 @@ then
     exit 1
 fi
 
-echo "Running command: ${bin_dir}/analyse_tb_sample --input $in_dir --output ${out_dir} --reference ${ref}"
-${bin_dir}/analyse_tb_sample --input $in_dir --output ${out_dir} --reference ${ref}
+echo "Running command: ${bin_dir}/analyse_sample --input $in_dir --output ${out_dir} --reference ${ref}"
+${bin_dir}/analyse_sample --input $in_dir --output ${out_dir} --reference ${ref}
 
