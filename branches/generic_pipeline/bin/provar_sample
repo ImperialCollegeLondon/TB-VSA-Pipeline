@@ -32,6 +32,8 @@ subdirectory for each sample, each of which contains the reads for the sample.
 
 =item B<output>: Path to write output files 
 
+=item B<snpeff_db>: Name of snpEff database for effect prediction
+
 =back
 
 =head1 AUTHOR - James Abbott
@@ -61,24 +63,26 @@ use Env::Modulecmd('gatk/3.6');
 use Env::Modulecmd('picard/2.6.0');
 use Env::Modulecmd('sambamba/0.6.5');
 use Env::Modulecmd('samtools/1.3.1');
+use Env::Modulecmd('snpeff/4.3a');
 use Env::Modulecmd('trim_galore/0.4.1');
 use Env::Modulecmd('vt/0.5.77');
 
 our $threads = 20;
 
 {
-    my ( $in_dir, $reference, $out_dir, $help, $man );
+    my ( $in_dir, $reference, $out_dir, $snpeff_db, $help, $man );
     GetOptions(
                 'input:s'     => \$in_dir,
                 'reference:s' => \$reference,
                 'output:s'    => \$out_dir,
+		'snpeff_db:s' => \$snpeff_db,
                 'help'        => \$help,
                 'man'         => \$man,
               );
     die "\nUnknown argument: @ARGV\n" if "@ARGV";
     my $message = "$0: Aligns and variant calls reads for a bacterial genome\n";
     pod2usage( verbose => 2, message => $message ) if ($man);
-    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$reference || !$out_dir );
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$reference || !$out_dir || !$snpeff_db );
 
     # select the sample based on PBS_ARRAY_INDEX
     opendir IN, $in_dir or die "Error: Could not open $in_dir: $!";
@@ -97,6 +101,7 @@ our $threads = 20;
     die "$in_dir does not exist"    if ( !-d "$in_dir" );
     die "$reference does not exist" if ( !-e $reference );
     die "$out_dir does not exist"   if ( !-d $out_dir );
+    my $ref_dir = dirname($reference);
 
     my $err_list;
     make_path( "$out_dir/$sample", { error => $err_list } ) if ( !-d "$out_dir/$sample" );
@@ -127,6 +132,7 @@ our $threads = 20;
     mark_duplicates("$out_dir/$sample/$sample.sorted.rg.bam");
     realign_indels( "$out_dir/$sample/$sample.no_dup.bam", $reference, $sample_out_dir );
     call_snvs( "$out_dir/$sample/$sample.realigned.bam", $reference, $sample_out_dir, $sample );
+    effect_prediction( "$out_dir/$sample/$sample.vcf", "$ref_dir", $snpeff_db);
     gather_statistics( "$out_dir/$sample", $sample, $reference );
 
     # add an flag to the outputs if we have got this far ok
@@ -403,16 +409,48 @@ sub call_snvs {
 
 ################################################################################
 #
+# effect prediction
+#
+# Carried out variant effect prediction using snpEff. The snpEff database should
+# have already been established by the submit_provar script.
+#
+# required parameters: $ (/path/to/vcf)
+#		       $ (/path/to/reference/data)
+#		       $ (snpEff database name)
+#
+# returns              $ (0 on success)
+#
+################################################################################
+
+sub effect_prediction {
+
+    my $vcf_file = shift;
+    my $ref_dir = shift;
+    my $snpeff_db = shift;
+
+    my $snpeff_dir = $ENV{'SNPEFF_HOME'};
+    
+    my $annvcf_file = $vcf_file;
+    $annvcf_file =~s/.vcf/.ann.vcf/;
+
+    my  $cmd = "java -jar $ENV{'SNPEFF_HOME'}/snpEff.jar eff -c ${ref_dir}/snpEff.config ${snpeff_db} ${vcf_file} > $annvcf_file";
+    run_cmd($cmd);
+
+    return;
+}
+
+################################################################################
+#
 # gather statistics
 #
 # Generates overview statistics on alignments and variants called
 # for the sample
 #
-# required samples: $ (output_directory)
-#                   $ (sample id)
-#                   $ (/path/to/reference.fa)
+# required parameters: $ (output_directory)
+#                      $ (sample id)
+#                      $ (/path/to/reference.fa)
 #
-# returns:          $ (0 on success)
+# returns:             $ (0 on success)
 #
 ################################################################################
 

@@ -4,15 +4,18 @@
 # Sizes job automatically based on the number of input data directories
 # filenames etc. are passed as variables with qsub's -v argument 
 
-# JCA 210317
+# JCA 
 
 usage="Usage: $0 -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference"
 real_path=$(realpath $0)
 bin_dir=$(dirname ${real_path})
 
 module load bio-bwa/0.7.15
-module load samtools/1.3.1
+module load EMBOSS/6.0.1
+module load intel-suite
 module load picard/2.6.0
+module load samtools/1.3.1
+module load snpeff/4.3a
 
 while getopts ":i:o:r:h" opt; do
         case $opt in 
@@ -44,6 +47,10 @@ then
     exit 1
 fi
 
+base=$(basename -s .gb ${ref})
+dir=$(dirname ${ref})
+fasta_ref="${dir}/${base}.fa"
+
 if ! [ -d ${in_dir} ]; 
 then
     echo ${in_dir} does not exist
@@ -63,38 +70,79 @@ then
     exit 1
 fi;
 
-if ! [ -e "${ref}.bwt" ];
+if [ "${dir}/${base}" == "${ref}" ];  #situation if basename has not matched suffix
+then
+    echo "Reference must be in genbank format and  filname suffixed with .gb"
+    exit 1
+fi;
+
+if ! [ -e "${dir}/${base}.fa" ]
+then
+    echo "Creating fasta format reference..."
+    seqret -auto -outseq ${fasta_ref} ${ref}
+fi;
+
+if ! [ -e "${fasta_ref}.bwt" ];
 then
     echo
     echo "Building BWA index...";
     echo
-    bwa index ${ref}
+    bwa index ${fasta_ref}
 fi
 
-if ! [ -e "${ref}.fai" ];
+if ! [ -e "${fasta_ref}.fai" ];
 then
     echo
     echo "Building fasta index...";
     echo
-    samtools faidx ${ref}
+    samtools faidx ${fasta_ref}
 fi
 
-base=$(basename -s .fa ${ref})
-if ! [ -e "${base}.dict" ];
+
+if ! [ -e "${dir}/${base}.dict" ];
 then
     echo
     echo "Building fasta dictionary...";
     echo
-    picard CreateSequenceDictionary R=${ref} O=${base}.dict
+    picard CreateSequenceDictionary R=${fasta_ref} O=${dir}/${base}.dict
+fi
+
+#build a snpEff configuration for the reference...
+if ! [ -e "${dir}/snpEff.config" ];
+then
+    echo
+    echo "Building snpEff database..."
+    echo
+
+    orig_dir=$(pwd)
+    organism=$(grep "/organism" ${ref}|awk -F= '{print $2}'|sed 's/"//g')
+    locus=$(grep "LOCUS" ${ref}|awk '{print $2}')
+
+    cp ${bin_dir}/../etc/snpEff.config ${dir}
+    sed -i "s#__REFDATA__#${dir}#" ${dir}/snpEff.config 
+
+    mkdir ${dir}/${base}
+    ln -s ${ref} ${dir}/${base}/genes.gbk
+
+    echo "${base}.genome : ${organism}" >> ${dir}/snpEff.config
+    echo "${base}.chromosome : ${locus}" >> ${dir}/snpEff.config
+    echo "${base}.${locus}.codonTable: Bacterial_and_Plant_Plastid" >> ${dir}/snpEff.config
+
+    cd ${dir}
+    java -jar ${SNPEFF_HOME}/snpEff.jar build -genbank -v ${base}
+    cd ${orig_dir}
+
 fi
 
 sample_count=$(ls -1 ${in_dir}|wc -l)
 
+cmd="qsub -J 1-${sample_count}:1 -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${fasta_ref},snpeff_db=${base} ${bin_dir}/provar"
+
 echo
-echo "running command: qsub -J 1-${sample_count}:1 ${bin_dir}/provar -i ${in_dir} -o ${out_dir} -r ${ref}"
+echo "running command: ${cmd}"
 echo
 
-job_id=$(qsub -J 1-${sample_count}:1 -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${ref} ${bin_dir}/provar)
+job_id=$(${cmd})
 
 echo 
 echo "Array job ${job_id} submitted with ${sample_count} samples..."

@@ -14,6 +14,7 @@
 # in_dir: directory containing input sample directories
 # out_dir: directory for outputs
 # ref: path to bwa-indexed reference fasta file 
+# snpeff_db: Name of snpeff database for effect prediction
 
 # JCA 210317
 
@@ -47,6 +48,12 @@ then
     exit 1
 fi
 
-echo "Running command: ${bin_dir}/provar_sample --input $in_dir --output ${out_dir} --reference ${ref}"
-${bin_dir}/provar_sample --input $in_dir --output ${out_dir} --reference ${ref}
+if [ -z ${snpeff_db} ];
+then
+    echo snpeff_db variable not set
+    exit 1
+fi
+
+echo "Running command: ${bin_dir}/provar_sample --input $in_dir --output ${out_dir} --reference ${ref} --snpeff_db ${snpeff_db}"
+${bin_dir}/provar_sample --input $in_dir --output ${out_dir} --reference ${ref} --snpeff_db ${snpeff_db}
 
