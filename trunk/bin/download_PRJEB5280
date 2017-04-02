@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#PBS -l ncpus=1
+#PBS -l mem=16Gb
+#PBS -l walltime=36:00:00
+#PBS -j oe 
+#PBS -q med-bio
+
+/groupvol/med-bio/jamesa/colijn/tb_pipeline/bin/download_ena_project --acc ERP004677 --output /groupvol/med-bio/jamesa/colijn/reads/PRJEB5280
+
