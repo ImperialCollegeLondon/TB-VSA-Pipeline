@@ -1,0 +1,60 @@
+#!/bin/bash -e
+
+# Wrapper for running build_vsa scripts on cx1,
+# intended to be submitted using 'submit_build_vsa' 
+
+# A series of variables need to set in the environment under which this script
+# is run (normally handled by PBS from -v args)
+
+# bin_dir: directory containing analyse_tb_sample script
+# in_dir: directory containing input sample directories
+# out_dir: directory for outputs
+# ref: path to bwa-indexed reference fasta file 
+# exclude: path to bed file of hypervariable regions to exclude from analysis
+
+# JCA 020417
+
+#PBS -l select=1:ncpus=1:mem=64gb
+#PBS -l walltime=04:00:00
+#PBS -q med-bio
+#PBS -j oe
+
+
+if [ -z ${bin_dir} ];
+then
+    echo bin_dir variable not set
+    exit 1
+fi
+
+if [ -z ${in_dir} ];
+then
+    echo in_dir variable not set
+    exit 1
+fi
+
+if [ -z ${out_dir} ];
+then
+    echo out_dir variable not set
+    exit 1
+fi
+
+if [ -z ${ref} ];
+then
+    echo ref variable not set
+    exit 1
+fi
+
+if [ -z ${exclude} ];
+then
+    echo exclude variable not set
+    exit 1
+fi
+
+cmd="${bin_dir}/build_vsa --input ${in_dir} --output ${out_dir} --reference ${ref} --exclude ${exclude}"
+
+echo
+echo "Running cmd: ${cmd}"
+echo
+
+$cmd
+
