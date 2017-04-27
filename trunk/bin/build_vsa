@@ -76,6 +76,7 @@ use Data::Dumper;
 
     my $refIO     = Bio::SeqIO->new( -file => $reference, -format => 'fasta' );
     my $ref       = $refIO->next_seq();
+    my $ref_id    = $ref->display_id();
     my @ref_bases = split( //, $ref->seq() );
 
     # @variants is for storing counts of variants at each locus
@@ -136,6 +137,7 @@ use Data::Dumper;
             die "No VCF file found in $in_dir/$sample...\n";
         }
     }
+    my @ref_alleles;
 
     #iterate through variants array to find variant loci....
     for ( my $i = 0 ; $i < $#variants ; $i++ ) {
@@ -143,6 +145,7 @@ use Data::Dumper;
         # only include bases which are indicated as being variant, but not in the exclude list
         if ( $variants[$i] > 0 && $exclude[$i] == 0 ) {
             my $ref_allele = $ref_bases[$i];
+	    push @ref_alleles, $ref_allele;
             foreach my $sample (@samples) {
                 $index{ $i + 1 }++;
                 my $sample_allele = $varlocs->{$sample}->[$i];
@@ -153,7 +156,11 @@ use Data::Dumper;
         }
     }
 
+    # reference sequence for vsa...
+    my $ref_loci_seq = Bio::Seq->new(-display_id($ref_id), -seq->join(@ref_alleles));
+
     my $outIO = Bio::SeqIO->new(-format=>'fasta', -file=>">$out_dir/variable_site_alignment.fa");
+    $outIO->write->seq($ref_loci_seq);
     foreach my $sample (@samples) {
 	my $seq = Bio::Seq->new(-display_id=>$sample, -seq=>$sample_vars->{$sample});
 	$outIO->write_seq($seq);
