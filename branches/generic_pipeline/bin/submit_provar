@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-# Script to submit tb_pipeline_run as an array job 
+# Script to submit provar as an array job 
 # Sizes job automatically based on the number of input data directories
 # filenames etc. are passed as variables with qsub's -v argument 
 
