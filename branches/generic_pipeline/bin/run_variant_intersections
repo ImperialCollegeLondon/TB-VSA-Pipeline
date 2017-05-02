@@ -1,0 +1,11 @@
+#!/bin/bash -e
+
+# Wrapper for running snpEff on cx1
+
+#PBS -l select=1:ncpus=4:mem=64gb
+#PBS -l walltime=04:00:00
+#PBS -q med-bio
+#PBS -j oe
+
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/variant_intersections --input /groupvol/med-bio/jamesa/freemont/analysis/ --out /groupvol/med-bio/jamesa/freemont/intersection --reference /groupvol/med-bio/jamesa/freemont/reference/PA01_AE004091.fa --snpeff_db PA01_AE004091
+

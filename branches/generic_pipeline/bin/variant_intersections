@@ -1,0 +1,250 @@
+#!/bin/perl
+
+use FindBin;
+use lib "$FindBin::Bin/../lib/perl5";
+
+=pod
+
+=head1 NAME
+
+    variant_intersections
+
+=head1 SYNOPSIS
+
+    variant_intersections --input input_directory --output output_directory --reference ref_fasta --snpeff_db dbname
+
+=head1 DESCRIPTION
+
+    Finds common snps between all samples in an analysis set
+
+ 
+=head1 REQUIRED ARGUMENTS
+
+=over 4
+
+=item B<input>: Path to directory containing inputs of vcf
+
+=item B<output>: Path to write output files 
+
+=item B<reference>: Path to reference fasta file
+
+=item B<snpeff_db>: Name of snpeff_db for annotation
+
+=back
+
+=head1 AUTHOR - James Abbott
+
+Email j.abbott@imperial.ac.uk
+
+=cut
+
+use warnings;
+use strict;
+
+use File::Basename;
+use File::Path qw(make_path);
+use Getopt::Long;
+use IPC::Cmd qw(run);
+use Pod::Usage;
+use Spreadsheet::WriteExcel;
+
+use Env::Modulecmd('java');
+use Env::Modulecmd('gatk/3.6');
+use Env::Modulecmd('snpeff/4.3a');
+
+our $threads = 20;
+
+{
+    my ( $in_dir, $reference, $out_dir, $snpeff_db, $help, $man );
+    GetOptions(
+                'input:s'     => \$in_dir,
+                'output:s'    => \$out_dir,
+		'reference:s' => \$reference,
+		'snpeff_db:s' => \$snpeff_db,
+                'help'        => \$help,
+                'man'         => \$man,
+              );
+
+    die "\nUnknown argument: @ARGV\n" if "@ARGV";
+    my $message = "$0: Aligns and variant calls reads for a bacterial genome\n";
+    pod2usage( verbose => 2, message => $message ) if ($man);
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$out_dir || !$reference || !$snpeff_db );
+
+
+    # validate inputs and create output directory
+    die "$in_dir does not exist"    if ( !-d "$in_dir" );
+    die "$reference does not exist"    if ( !-e "$reference" );
+
+    my $err_list;
+    make_path( "$out_dir", { error => $err_list } ) if ( !-d "$out_dir" );
+    if ( defined $err_list && @$err_list ) {
+        for my $err (@$err_list) {
+            my ( $file, $message ) = %$err;
+            print "Error creating output directory $out_dir: $message\n";
+        }
+    }
+
+    my $samples = find_intersections($in_dir, $out_dir, $reference, $snpeff_db);
+    create_spreadsheets($out_dir, $samples); 
+
+}
+
+################################################################################
+#
+# run_cmd executes a commandline via IPC::Run and dies nicely should it be required...
+#
+# required arguments: $ (cmd to run)
+#
+# returns: $ (0 on success)
+#
+################################################################################
+
+sub run_cmd {
+
+    my $cmd = shift;
+    print "\nRunning command: $cmd\n\n";
+
+    my ( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) = run( command => $cmd, verbose => 0 );
+    print join "", @$full_buf;
+    die "\nError running command: $error_message" if ( !$success );
+
+    return (0);
+
+}
+
+################################################################################
+#
+# find_intersections
+#
+# required arguments: $ (input directory)
+#		      $ (output directory) 
+#		      $ (reference fasta file)
+#
+# returns:	      $ (arrayref of sample ids)
+#
+################################################################################
+
+sub find_intersections {
+
+    my $in_dir    = shift;
+    my $out_dir   = shift;
+    my $reference = shift;
+    my $snpeff_db = shift;
+
+    my $ref_dir = dirname($reference);
+    
+    opendir IN, $in_dir or die "Error: Could not open $in_dir: $!";
+    my @samples = grep !/\.\.?\z/, readdir IN;
+    close IN;
+
+    for (my $i=0;$i<=$#samples;$i++) {
+	for (my $j=0;$j<=$#samples;$j++) {
+	    if ($samples[$i] ne $samples[$j]) {
+		print "Comparing $samples[$i] -> $samples[$j]";
+
+		my $cmd = "java -jar $ENV{'GATK_HOME'}/GenomeAnalysisTK.jar -T CombineVariants -R ${reference} ";
+		$cmd .= "-V:vcf1 $in_dir/$samples[$i]/$samples[$i].vcf -V:vcf2 $in_dir/$samples[$j]/$samples[$j].vcf -o $out_dir/$samples[$i]_$samples[$j]_union.vcf";
+		run_cmd($cmd);
+
+		$cmd = "java -jar $ENV{'GATK_HOME'}/GenomeAnalysisTK.jar -T SelectVariants -R ${reference} ";
+		$cmd .= "-V:vcf $out_dir/$samples[$i]_$samples[$j]_union.vcf -select 'set == \"Intersection\";' -o $out_dir/$samples[$i]_$samples[$j]_isect.vcf";
+		run_cmd($cmd);
+		annotate_vcf("$out_dir/$samples[$i]_$samples[$j]_isect.vcf", $ref_dir, $snpeff_db );
+	    } 
+	}
+    }
+    return(\@samples)
+
+}
+
+################################################################################
+#
+# annotate_vcf
+#
+# Annotates VCF using snpEff then filters high and moderate variants
+#
+# required params: $ (path/to/vcf file)
+#		   $ (path/to/ref dir)
+#		   $ (snpeff db name)
+#
+################################################################################
+
+sub annotate_vcf {
+
+    my $vcf_file = shift;
+    my $ref_dir = shift;
+    my $snpeff_db = shift;
+
+    my $snpeff_dir = $ENV{'SNPEFF_HOME'};
+    
+    my $annvcf_file = $vcf_file;
+    $annvcf_file =~s/.vcf$/.ann.vcf/;
+    my $high_vcf = $vcf_file;
+    $high_vcf =~s/.vcf$/.high.vcf/;
+    my $mod_vcf = $vcf_file;
+    $mod_vcf =~s/.vcf$/.mod.vcf/;
+
+    my $cmd = "java -jar $ENV{'SNPEFF_HOME'}/snpEff.jar eff -c ${ref_dir}/snpEff.config ${snpeff_db} ${vcf_file} > $annvcf_file";
+    run_cmd($cmd);
+    
+    $cmd = "cat $annvcf_file | java -jar $ENV{'SNPEFF_HOME'}/SnpSift.jar filter \"(ANN[*].IMPACT='HIGH')\" > $high_vcf";
+    run_cmd($cmd);
+    $cmd = "cat $annvcf_file | java -jar $ENV{'SNPEFF_HOME'}/SnpSift.jar filter \"(ANN[*].IMPACT='MODERATE')\" > $mod_vcf";
+    run_cmd($cmd);
+
+}
+
+################################################################################
+#
+# create_spreadsheets
+#
+# Creates per-sample spreadsheets of common variants
+#
+# required params: $ (path to filtered, annotated, vcf_files)
+#		   $ (out_dir)
+#		   $ (samples arrayref)
+#
+# returns:         $ (0) on success
+#
+################################################################################
+
+sub create_spreadsheets {
+
+    my $vcf_path = shift;
+    my $out_dir = shift;
+    my $samples = shift;
+
+    print "\nCreating spreadsheets...\n";
+    foreach my $sample(@$samples) {
+
+	my $wb = Spreadsheet::WriteExcel->new("$out_dir/$sample.xls");
+	my $bold = $wb->add_format();
+	foreach my $comp_sample (@$samples) {
+	    next if ($comp_sample eq $sample);
+	    my $ws = $wb->add_worksheet($comp_sample);
+	    my $row=0;
+	    foreach my $impact (qw(high mod)) {
+		$ws->write(++$row,0,"$impact impact",$bold);	
+		$ws->write(++$row,0,"POS",$bold);
+		$ws->write($row,1,"REF",$bold);
+		$ws->write($row,2,"ALT",$bold);
+		$ws->write($row,3,"INFO", $bold);
+
+		my $vcf = "$vcf_path/${sample}_${comp_sample}_isect.$impact.vcf";
+		die "$vcf not found..." unless (-e $vcf);
+		open VCF, $vcf or die "Error opening $vcf: $!";
+		while (my @fields = split(/\t/,<VCF>)) {
+		    next if ($fields[0]=~/^#/);
+		    $ws->write(++$row,0,$fields[1]);
+		    $ws->write($row,1,$fields[3]);
+		    $ws->write($row,2,$fields[4]);
+		    $ws->write($row,3,$fields[7]);
+		}
+		close VCF;
+		$row++;
+	    }
+	    
+	}
+    } 
+
+}
