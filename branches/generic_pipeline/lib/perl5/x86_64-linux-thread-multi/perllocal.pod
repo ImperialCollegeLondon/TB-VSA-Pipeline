@@ -20,3 +20,25 @@ C<EXE_FILES: >
 
 =back
 
+=head2 Thu Apr  6 10:57:15 2017: C<Module> L<Spreadsheet::WriteExcel|Spreadsheet::WriteExcel>
+
+=over 4
+
+=item *
+
+C<installed into: /groupvol/med-bio/jamesa/freemont/pipeline//lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 2.40>
+
+=item *
+
+C<EXE_FILES: bin/chartex>
+
+=back
+

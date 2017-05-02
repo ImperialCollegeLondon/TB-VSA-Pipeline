@@ -39,10 +39,6 @@ use Getopt::Long;
 use Pod::Usage;
 use Spreadsheet::WriteExcel;
 
-use Env::Modulecmd('java');
-use Env::Modulecmd('gatk/3.6');
-use Env::Modulecmd('snpeff/4.3a');
-
 
 {
     my ( $in_dir, $help, $man );
