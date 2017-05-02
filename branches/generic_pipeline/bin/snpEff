@@ -1,0 +1,56 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use Env::Modulecmd('snpeff/4.3a');
+use IPC::Cmd qw(run);
+use Pod::Usage;
+use Getopt::Long;
+
+{
+    my ( $in_dir, $reference, $out_dir, $ref_dir, $snpeff_db, $vcf_file, $help, $man );
+    GetOptions(
+		'ref_dir:s'   => \$ref_dir, 
+		'snpeff_db:s' => \$snpeff_db,
+		'vcf:s'       => \$vcf_file,
+                'help'        => \$help,
+                'man'         => \$man,
+              );
+    die "\nUnknown argument: @ARGV\n" if "@ARGV";
+    my $message = "$0: runs snpEff on a vcf file\n";
+    pod2usage( verbose => 2, message => $message ) if ($man);
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$ref_dir || !$vcf_file || !$snpeff_db );
+
+    my $snpeff_dir = $ENV{'SNPEFF_HOME'};
+    
+    my $annvcf_file = $vcf_file;
+    $annvcf_file =~s/.vcf$/.ann.vcf/;
+
+    my  $cmd = "java -jar $ENV{'SNPEFF_HOME'}/snpEff.jar eff -c ${ref_dir}/snpEff.config ${snpeff_db} ${vcf_file} > $annvcf_file";
+    run_cmd($cmd);
+}
+
+
+################################################################################
+#
+# run_cmd executes a commandline via IPC::Run and dies nicely should it be required...
+#
+# required arguments: $ (cmd to run)
+#
+# returns: $ (0 on success)
+#
+################################################################################
+
+sub run_cmd {
+
+    my $cmd = shift;
+    print "\nRunning command: $cmd\n\n";
+
+    my ( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) = run( command => $cmd, verbose => 0 );
+    print join "", @$full_buf;
+    die "\nError running command: $error_message" if ( !$success );
+
+    return (0);
+
+}

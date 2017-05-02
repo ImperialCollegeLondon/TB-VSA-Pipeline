@@ -1,0 +1,19 @@
+#!/bin/bash -e
+
+# Wrapper for running snpEff on cx1
+
+#PBS -l select=1:ncpus=20:mem=64gb
+#PBS -l walltime=01:00:00
+#PBS -q med-bio
+#PBS -j oe
+
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L1a.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L2a.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L2b.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L4.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L5.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L6.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L7.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L8.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L9.wham.filtered.vcf
+/groupvol/med-bio/jamesa/freemont/pipeline/bin/snpEff --snpeff_db PA01_AE004091 --ref_dir /groupvol/med-bio/jamesa/freemont/reference --vcf /groupvol/med-bio/jamesa/freemont/analysis/vcf/wham/L10.wham.filtered.vcf
