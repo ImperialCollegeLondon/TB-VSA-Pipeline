@@ -1,0 +1,131 @@
+#!/bin/perl
+
+use FindBin;
+use lib "$FindBin::Bin/../lib/perl5";
+
+=pod
+
+=head1 NAME
+
+   intersection_spreadsheets 
+
+=head1 SYNOPSIS
+
+    intersection_spreadsheets --input input_directory
+
+=head1 DESCRIPTION
+
+    Build per-sample spreadsheets of variant intersections
+
+ 
+=head1 REQUIRED ARGUMENTS
+
+=over 4
+
+=item B<input>: Path to directory containing inputs of vcf
+
+=back
+
+=head1 AUTHOR - James Abbott
+
+Email j.abbott@imperial.ac.uk
+
+=cut
+
+use warnings;
+use strict;
+
+use Getopt::Long;
+use Pod::Usage;
+use Spreadsheet::WriteExcel;
+
+use Env::Modulecmd('java');
+use Env::Modulecmd('gatk/3.6');
+use Env::Modulecmd('snpeff/4.3a');
+
+
+{
+    my ( $in_dir, $help, $man );
+    GetOptions(
+                'input:s'     => \$in_dir,
+                'help'        => \$help,
+                'man'         => \$man,
+              );
+
+    die "\nUnknown argument: @ARGV\n" if "@ARGV";
+    my $message = "$0: Aligns and variant calls reads for a bacterial genome\n";
+    pod2usage( verbose => 2, message => $message ) if ($man);
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir );
+
+
+    # validate inputs and create output directory
+    die "$in_dir does not exist"    if ( !-d "$in_dir" );
+
+    opendir IN, $in_dir or die "Error: Could not open $in_dir: $!";
+    my @samples = grep !/\.\.?\z/, readdir IN;
+    close IN;
+    my %samples;
+    foreach my $sample(@samples) {
+	if ($sample=~/^([^_]+)_/) {
+	    $samples{$1}++    
+	}
+    }
+    @samples = sort {$a cmp $b} keys(%samples);
+
+    create_spreadsheets($in_dir, \@samples); 
+
+}
+
+################################################################################
+#
+# create_spreadsheets
+#
+# Creates per-sample spreadsheets of common variants
+#
+# required params: $ (path to filtered, annotated, vcf_files)
+#		   $ (out_dir)
+#		   $ (samples arrayref)
+#
+# returns:         $ (0) on success
+#
+################################################################################
+
+sub create_spreadsheets {
+
+    my $vcf_path = shift;
+    my $samples = shift;
+
+    print "\nCreating spreadsheets...\n";
+    foreach my $sample(@$samples) {
+
+	my $wb = Spreadsheet::WriteExcel->new("$vcf_path/$sample.xls");
+	my $bold = $wb->add_format();
+	foreach my $comp_sample (@$samples) {
+	    next if ($comp_sample eq $sample);
+	    my $ws = $wb->add_worksheet($comp_sample);
+	    my $row=0;
+	    foreach my $impact (qw(high mod)) {
+		$ws->write(++$row,0,"$impact impact",$bold);	
+		$ws->write(++$row,0,"POS",$bold);
+		$ws->write($row,1,"REF",$bold);
+		$ws->write($row,2,"ALT",$bold);
+		$ws->write($row,3,"INFO", $bold);
+
+		my $vcf = "$vcf_path/${sample}_${comp_sample}_isect.$impact.vcf";
+		die "$vcf not found..." unless (-e $vcf);
+		open VCF, $vcf or die "Error opening $vcf: $!";
+		while (my @fields = split(/\t/,<VCF>)) {
+		    next if ($fields[0]=~/^#/);
+		    $ws->write(++$row,0,$fields[1]);
+		    $ws->write($row,1,$fields[3]);
+		    $ws->write($row,2,$fields[4]);
+		    $ws->write($row,3,$fields[7]);
+		}
+		close VCF;
+		$row++;
+	    }
+	    
+	}
+    } 
+
+}
