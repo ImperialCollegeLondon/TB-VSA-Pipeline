@@ -1,0 +1,470 @@
+#!/bin/perl
+
+use FindBin;
+use lib "$FindBin::Bin/../lib/perl5";
+
+=pod
+
+=head1 NAME
+
+    align_ref
+
+=head1 SYNOPSIS
+
+    align_ref --input input_directory --output output_directory --reference /path/to/reference.fasta
+
+=head1 DESCRIPTION
+
+Carries out read alignment and variant calling on a bacterial genome sequence.
+Intended to be run under PBS where a batch of samples are submitted as an array
+job. The read sequences should be arranged in a directory containing a
+subdirectory for each sample, each of which contains the reads for the sample.
+    
+=head1 REQUIRED ARGUMENTS
+
+=over 4
+
+=item B<input>: Path to directory containing subdirs of sequence reads, 1 per sample
+
+=item B<reference>: Path to fasta formatted reference sequence.
+
+=item B<output>: Path to write output files 
+
+=item B<snpeff_db>: Name of snpEff database for effect prediction
+
+=back
+
+=head1 AUTHOR - James Abbott
+
+Email j.abbott@imperial.ac.uk
+
+=cut
+
+use warnings;
+use strict;
+
+use Archive::Zip;
+use File::Basename;
+use File::Path qw(make_path);
+use Getopt::Long;
+use IPC::Cmd qw(run);
+use Pod::Usage;
+
+# N.B. sambamba has a version number embedded in it's filename
+# so commands will need updating if this version is updated
+
+use Env::Modulecmd('bio-bwa/0.7.15');
+use Env::Modulecmd('cutadapt/1.10');
+use Env::Modulecmd('fastqc/0.11.2');
+use Env::Modulecmd('freebayes/1.1.0');
+use Env::Modulecmd('gatk/3.6');
+use Env::Modulecmd('picard/2.6.0');
+use Env::Modulecmd('sambamba/0.6.5');
+use Env::Modulecmd('samtools/1.3.1');
+use Env::Modulecmd('snpeff/4.3a');
+use Env::Modulecmd('trim_galore/0.4.1');
+use Env::Modulecmd('vt/0.5.77');
+
+our $threads = 20;
+
+{
+    my ( $in_dir, $reference, $out_dir, $snpeff_db, $help, $man );
+    GetOptions(
+                'input:s'     => \$in_dir,
+                'reference:s' => \$reference,
+                'output:s'    => \$out_dir,
+		'snpeff_db:s' => \$snpeff_db,
+                'help'        => \$help,
+                'man'         => \$man,
+              );
+    die "\nUnknown argument: @ARGV\n" if "@ARGV";
+    my $message = "$0: Aligns and variant calls reads for a bacterial genome\n";
+    pod2usage( verbose => 2, message => $message ) if ($man);
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$reference || !$out_dir || !$snpeff_db );
+
+    # select the sample based on PBS_ARRAY_INDEX
+    opendir IN, $in_dir or die "Error: Could not open $in_dir: $!";
+    my @samples = grep !/\.\.?\z/, readdir IN;
+    close IN;
+
+    my $sample = $samples[ $ENV{'PBS_ARRAY_INDEX'} - 1 ];
+    print "Sample = $sample\n";
+
+    if ( -e "$out_dir/$sample/$sample.all_done" ) {
+        print "\n$sample has already successfully completed\n";
+        exit(0);
+    }
+
+    # validate inputs and create output directory
+    die "$in_dir does not exist"    if ( !-d "$in_dir" );
+    die "$reference does not exist" if ( !-e $reference );
+    die "$out_dir does not exist"   if ( !-d $out_dir );
+    my $ref_dir = dirname($reference);
+
+    my $err_list;
+    make_path( "$out_dir/$sample", { error => $err_list } ) if ( !-d "$out_dir/$sample" );
+    if ( defined $err_list && @$err_list ) {
+        for my $err (@$err_list) {
+            my ( $file, $message ) = %$err;
+            print "Error creating output directory $out_dir: $message\n";
+        }
+    }
+
+    # Identify the read files
+    opendir IN, "$in_dir/$sample" or die "Error opening $in_dir/$sample: $!";
+    my @files = grep !/\.\.?\z/, readdir IN;
+    close IN;
+
+    my $read1 = ( grep /_1.(fq|fastq)(.gz)?/, @files )[0];
+    my $read2 = ( grep /_2.(fq|fastq)(.gz)?/, @files )[0];
+    print "Read1 = $read1; Read2 = $read2\n";
+
+    my $fq_read1       = "$in_dir/$sample/$read1";
+    my $fq_read2       = "$in_dir/$sample/$read2";
+    my $sample_out_dir = "$out_dir/$sample";
+
+    run_fastqc( $fq_read1, $fq_read2, $sample_out_dir );
+    trim_reads( $fq_read1, $fq_read2, $sample_out_dir );
+    align_reads( $sample, "$in_dir/$sample/$read1", "$in_dir/$sample/$read2", $reference, "$out_dir/$sample" );
+    add_read_groups( "$out_dir/$sample//$sample.sorted.bam", $sample );
+    mark_duplicates("$out_dir/$sample/$sample.sorted.rg.bam");
+    realign_indels( "$out_dir/$sample/$sample.no_dup.bam", $reference, $sample_out_dir );
+#    #call_snvs( "$out_dir/$sample/$sample.realigned.bam", $reference, $sample_out_dir, $sample );
+#    effect_prediction( "$out_dir/$sample/$sample.vcf", "$ref_dir", $snpeff_db);
+#    gather_statistics( "$out_dir/$sample", $sample, $reference );
+
+    # add an flag to the outputs if we have got this far ok
+    open DONE_FLAG, ">$out_dir/$sample/$sample.all_done";
+    close DONE_FLAG;
+#
+}
+
+################################################################################
+#
+# run_cmd executes a commandline via IPC::Run and dies nicely should it be required...
+#
+# required arguments: $ (cmd to run)
+#
+# returns: $ (0 on success)
+#
+################################################################################
+
+sub run_cmd {
+
+    my $cmd = shift;
+    print "\nRunning command: $cmd\n\n";
+
+    my ( $success, $error_message, $full_buf, $stdout_buf, $stderr_buf ) = run( command => $cmd, verbose => 0 );
+    print join "", @$full_buf;
+    die "\nError running command: $error_message" if ( !$success );
+
+    return (0);
+
+}
+
+################################################################################
+#
+#  run_fastqc
+#
+#  Carries out qc assessment of reads and creates summary table for easy parsing
+#  in creating summary report
+#
+#  requred arguments: $ (/path/to/read1.fq)
+#                     $ (/path/to/read2.fq)
+#                     $ (/path/to/outdir)
+#
+#  returns          : $ (0 on success)
+#
+################################################################################
+
+sub run_fastqc {
+
+    my $read1   = shift;
+    my $read2   = shift;
+    my $out_dir = shift;
+
+    my $err_list;
+    make_path( "$out_dir/fastqc", { error => $err_list } ) if ( !-d "$out_dir/fastqc" );
+    if ( defined $err_list && @$err_list ) {
+        for my $err (@$err_list) {
+            my ( $file, $message ) = %$err;
+            print "Error creating output directory $out_dir/fastqc: $message\n";
+        }
+    }
+
+    my $cmd = "fastqc -o $out_dir/fastqc $read1 $read2";
+    run_cmd($cmd);
+
+    chdir "$out_dir/fastqc" or die "Error changing to $out_dir/fastqc: $!";
+
+    foreach my $file ( $read1, $read2 ) {
+        my $f = basename($file);
+        $f =~ s/\.(fq|fastq)(\.gz)?//;
+        if ( -e "${f}_fastqc.zip" ) {
+            my $archive = Archive::Zip->new("${f}_fastqc.zip");
+            foreach my $member ( $archive->members ) {
+                next unless ( $member->fileName eq "${f}_fastqc/summary.txt" );
+                $member->extractToFileNamed("$out_dir/${f}_fastqc.summary.txt");
+            }
+
+        }
+
+    }
+
+}
+
+################################################################################
+#
+# trim_reads
+#
+# Carries out quality and adapter trimming of reads with trim-galore
+#
+# required arguments: $ (/path/to/read1/fq)
+#                     $ (/path/to/read2/fq)
+#
+# returns: $$ (path/to/trimmed_read1.fq, /path/to/trimmed_read2.fq)
+#
+################################################################################
+
+sub trim_reads {
+
+    my $fq_read1 = shift;
+    my $fq_read2 = shift;
+    my $out_dir  = shift;
+
+    my $cmd = "trim_galore --length 70 --paired -o $out_dir $fq_read1 $fq_read2";
+    run_cmd($cmd);
+
+}
+
+################################################################################
+#
+# align_reads
+#
+# Carries out read alignment against the reference using bwa mem
+#
+# required arguments: $ (sample name)
+#		      $ (/path/to/read1.fq)
+#                     $ (/path/to/read2.fq)
+#		      $ (/path/to/indexed_reference)
+#                     $ (output directory)
+#
+################################################################################
+
+sub align_reads {
+
+    my $sample    = shift;
+    my $fq_read1  = shift;
+    my $fq_read2  = shift;
+    my $reference = shift;
+    my $out_dir   = shift;
+
+    my $cmd =
+"bwa mem -t ${threads} -M $reference $fq_read1 $fq_read2|sambamba_v0.6.5 view -f bam -S -o $out_dir/$sample.bam /dev/stdin";
+    run_cmd($cmd);
+
+    # sort alignments
+    $cmd = "sambamba_v0.6.5 sort -t ${threads} $out_dir/$sample.bam";
+    run_cmd($cmd);
+
+
+    #remove unsorted alignments
+    unlink "$out_dir/$sample.bam" or die "Error removing $out_dir/$sample.bam";
+}
+
+################################################################################
+#
+# add_read_groups
+#
+# Add read group headers to bam file
+#
+# required parameters: $ (bam_file)
+#	               $ (sample)
+#
+# returns: $ (0 on success)
+#
+################################################################################
+
+sub add_read_groups {
+
+    my $bam_file = shift;
+    my $sample   = shift;
+
+    my $id = $ENV{'PBS_ARRAY_INDEX'};
+
+    my $output_bam_file = $bam_file;
+    $output_bam_file =~ s/bam/rg.bam/;
+
+    my $cmd = "picard AddOrReplaceReadGroups I=$bam_file O=$output_bam_file RGID=$id";
+    $cmd .= " RGLB=$sample RGPL=Illumina RGPU=1 RGSM=$sample";
+
+    run_cmd($cmd);
+
+    return (0);
+
+}
+
+################################################################################
+#
+# mark_duplicates
+#
+# Mark PCR duplicates in aligned reads
+#
+# required arguments: $ (/path/to/bam_file)
+#
+# returns: $ (0 on success)
+#
+################################################################################
+
+sub mark_duplicates {
+
+    my $bam_file = shift;
+
+    my $dup_bam_file = $bam_file;
+    $dup_bam_file =~ s/(.sorted)?.rg.bam/.no_dup.bam/;
+    my $dup_txt_file = $dup_bam_file;
+    $dup_txt_file =~ s/.bam/.txt/;
+
+    # sambamba seemed to be generating some corrupt files, so have to stick
+    # with picard
+    my $cmd = "picard MarkDuplicates I=$bam_file O=$dup_bam_file M=$dup_txt_file";
+    run_cmd($cmd);
+
+    $cmd = "picard BuildBamIndex INPUT=$dup_bam_file";
+    run_cmd($cmd);
+
+}
+
+################################################################################
+#
+# realign_indels
+#
+# Carries out indel realignment using GATK IndelRealigner
+#
+# required arguments: $ (/path/to/bam_file)
+#                     $ (/path/to/reference.fa)
+#		      $ (/path/to/output_dir)
+#
+# returns: $ (0 on success)
+#
+################################################################################
+
+sub realign_indels {
+
+    my $bam_file  = shift;
+    my $reference = shift;
+    my $out_dir   = shift;
+
+    my $output_bam_file = $bam_file;
+    $output_bam_file =~ s/no_dup/realigned/;
+
+    my $cmd =
+      "gatk -T RealignerTargetCreator -nt ${threads} -R $reference -I $bam_file -o $out_dir/IndelLoci.intervals";
+    run_cmd($cmd);
+
+    $cmd =
+"gatk -T IndelRealigner -R $reference -I $bam_file -targetIntervals $out_dir/IndelLoci.intervals -o $output_bam_file";
+    run_cmd($cmd);
+
+}
+
+################################################################################
+#
+# call_snvs
+#
+# Calls SNVs on the realigned bam file using Varscan
+#
+# Required arguments: $ (/path/to/bam_file)
+#		      $ (/path/to/reference.fa)
+#		      $ (/path/to/output_dir)
+#		      $ (sample)
+#
+# returns	      $ (0 on success)
+#
+################################################################################
+
+sub call_snvs {
+
+    my $bam_file  = shift;
+    my $reference = shift;
+    my $out_dir   = shift;
+    my $sample    = shift;
+
+    # Freebayes arguments for generating SNV calls only :
+    # -p 1: ploidy = 1
+    # -j  : use mapping quality
+    # -0  : standard quality filters - min mapping quality 30; min base quality 20;
+    #       min supporting allele qsum 0; genotype variant thereshold 0
+    # -F  : min alternate fraction 0.8 (need min 80% calls supporting variant)
+
+    my $cmd = "freebayes -p 1 -j -0 -F 0.8 -f $reference $bam_file";
+    $cmd .= "| vt normalize -r $reference - > $out_dir/$sample.vcf";
+    run_cmd($cmd);
+
+    return (0)
+
+}
+
+################################################################################
+#
+# effect prediction
+#
+# Carried out variant effect prediction using snpEff. The snpEff database should
+# have already been established by the submit_provar script.
+#
+# required parameters: $ (/path/to/vcf)
+#		       $ (/path/to/reference/data)
+#		       $ (snpEff database name)
+#
+# returns              $ (0 on success)
+#
+################################################################################
+
+sub effect_prediction {
+
+    my $vcf_file = shift;
+    my $ref_dir = shift;
+    my $snpeff_db = shift;
+
+    my $snpeff_dir = $ENV{'SNPEFF_HOME'};
+    
+    my $annvcf_file = $vcf_file;
+    $annvcf_file =~s/.vcf/.ann.vcf/;
+
+    my  $cmd = "java -jar $ENV{'SNPEFF_HOME'}/snpEff.jar eff -c ${ref_dir}/snpEff.config ${snpeff_db} ${vcf_file} > $annvcf_file";
+    run_cmd($cmd);
+
+    return;
+}
+
+################################################################################
+#
+# gather statistics
+#
+# Generates overview statistics on alignments and variants called
+# for the sample
+#
+# required parameters: $ (output_directory)
+#                      $ (sample id)
+#                      $ (/path/to/reference.fa)
+#
+# returns:             $ (0 on success)
+#
+################################################################################
+
+sub gather_statistics {
+
+    my $out_dir   = shift;
+    my $sample    = shift;
+    my $reference = shift;
+
+    my $cmd = "picard CollectWgsMetrics I=$out_dir/$sample.realigned.bam";
+    $cmd .= " O=$out_dir/$sample.wgs_metrics.txt R=$reference";
+    run_cmd($cmd);
+    
+    $cmd = "sambamba_v0.6.5 flagstat -t ${threads} $out_dir/$sample.realigned.bam";
+    $cmd .= " > $out_dir/$sample.flagstat";
+    run_cmd($cmd);
+
+    return;
+}
