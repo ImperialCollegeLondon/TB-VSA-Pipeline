@@ -157,10 +157,10 @@ use Data::Dumper;
     }
 
     # reference sequence for vsa...
-    my $ref_loci_seq = Bio::Seq->new(-display_id($ref_id), -seq->join(@ref_alleles));
+    my $ref_loci_seq = Bio::Seq->new(-display_id=>$ref_id, -seq=>(join('',@ref_alleles)));
 
     my $outIO = Bio::SeqIO->new(-format=>'fasta', -file=>">$out_dir/variable_site_alignment.fa");
-    $outIO->write->seq($ref_loci_seq);
+    $outIO->write_seq($ref_loci_seq);
     foreach my $sample (@samples) {
 	my $seq = Bio::Seq->new(-display_id=>$sample, -seq=>$sample_vars->{$sample});
 	$outIO->write_seq($seq);
