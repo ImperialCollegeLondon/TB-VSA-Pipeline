@@ -1,7 +1,5 @@
 #!/bin/perl
 
-#TODO: update to use central vt installation when available...
-#
 use FindBin;
 use lib "$FindBin::Bin/../lib/perl5";
 
@@ -13,7 +11,7 @@ use lib "$FindBin::Bin/../lib/perl5";
 
 =head1 SYNOPSIS
 
-    analyse_tb_sample --input input_directory --output output_directory --reference /path/to/reference.fasta
+    analyse_tb_sample --input input_directory --output output_directory --reference /path/to/reference.fasta [--sample sample name]
 
 =head1 DESCRIPTION
 
@@ -31,6 +29,14 @@ subdirectory for each sample, each of which contains the reads for the sample.
 =item B<reference>: Path to fasta formatted reference sequence.
 
 =item B<output>: Path to write output files 
+
+=back
+
+=head1 OPTIONAL ARGUMENTS
+
+=over 4
+
+=item B<sample>: Sample name (for running individual samples outside cluster environment)
 
 =back
 
@@ -53,6 +59,7 @@ use Pod::Usage;
 # N.B. sambamba has a version number embedded in it's filename
 # so commands will need updating if this version is updated
 
+# Comment out the following 'use' lines if not running on cx1
 use Env::Modulecmd('bio-bwa/0.7.15');
 use Env::Modulecmd('cutadapt/1.10');
 use Env::Modulecmd('fastqc/0.11.2');
@@ -67,11 +74,12 @@ use Env::Modulecmd('vt/0.5.77');
 our $threads = 20;
 
 {
-    my ( $in_dir, $reference, $out_dir, $help, $man );
+    my ( $in_dir, $reference, $out_dir, $sample, $help, $man );
     GetOptions(
                 'input:s'     => \$in_dir,
                 'reference:s' => \$reference,
                 'output:s'    => \$out_dir,
+				'sample:s'    => \$sample,
                 'help'        => \$help,
                 'man'         => \$man,
               );
@@ -85,7 +93,7 @@ our $threads = 20;
     my @samples = grep !/\.\.?\z/, readdir IN;
     close IN;
 
-    my $sample = $samples[ $ENV{'PBS_ARRAY_INDEX'} - 1 ];
+    $sample = $samples[ $ENV{'PBS_ARRAY_INDEX'} - 1 ] if defined($ENV{'PBS_ARRAY_INDEX'}); 
     print "Sample = $sample\n";
 
     if ( -e "$out_dir/$sample/$sample.all_done" ) {
