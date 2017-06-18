@@ -1,0 +1,297 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% $HeadURL$
+% $Author$
+% $Revision$
+% $Date$
+%
+% Colijn TB Pipeline documentation
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[a4paper,10pt,twoside]{article}
+
+\usepackage{float}
+\usepackage[justification=raggedright,singlelinecheck=false,skip=5pt,font=small]{caption}
+\usepackage[sc]{mathpazo}
+\usepackage{microtype}
+\usepackage{sectsty}
+\usepackage{graphicx}
+\usepackage{grffile}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{fancyhdr} 
+\usepackage{framed}
+\usepackage[dvipsnames]{xcolor}
+
+\linespread{1.05}
+\setlength{\headsep}{20pt}
+\setlength{\headheight}{12pt}
+
+\usepackage[compact]{titlesec}
+
+\usepackage{geometry}
+\geometry{ a4paper, left=20mm, top=20mm, right=20mm}
+
+\pagestyle{fancy} % All pages have headers and footers
+\fancyhead{} % clear default header
+\fancyfoot{}  % clear default footer
+\fancyhead[L]{TB Variable Site Alignment Pipeline} % left justified header content
+\fancyhead[R]{Version 0.1.0} % right justified header content
+\fancyfoot[LE,RO]{\thepage} %alternate page numbering
+\renewcommand{\familydefault}{\sfdefault} % set default font family
+\allsectionsfont{\sffamily\raggedright}
+\captionsetup{
+  font=footnotesize,
+  justification=raggedright,
+  singlelinecheck=false
+}
+
+\newenvironment{tight_enumerate}{
+\begin{enumerate}
+  \setlength{\itemsep}{0pt}
+  \setlength{\parskip}{0pt}
+}{\end{enumerate}}
+
+\title{TB Variable Site Alignment Pipeline}
+\date{\today}
+\author{James Abbott (j.abbott\@imperial.ac.uk)}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy} % All pages have headers and footers
+
+\tableofcontents
+
+\section{Introduction}
+
+This document describes the pipeline produced for Caroline Colijn to generate
+variable-site alignments (VSA) of populations of TB isolates from paired-end
+Illumina WGS data. The pipeline carries out data QC and read-trimming/adapter
+removal, followed by alignment of the sequence reads to a reference TB strain
+using BWA.  Duplicate reads are marked, and local realignment of reads around
+potential indel sites is then carried out. SNVs are then identified using
+FreeBayes. An alignment consisiting of only the variable sites in the
+population is then created excluding hypervariable regions.
+
+The pipeline has been designed to run on a cluster (cx1) under a batch queing
+system (PBS Pro). Moving the software to run under a different environment will
+require modification of PBS directives etc. accordingly.
+
+\section{Installation}
+%TODO
+
+\subsection{Prerequisites}
+
+A number of software packages are necessary to run this pipeline. These should
+be installed so that their binaries are available on the default path in the
+environment the software will be executed under. If run on the cx1 cluster, the
+appropriate environment modules will be automatically loaded at runtime so no
+action is required to add the binaries to the path. The required packages are
+listed in table \ref{tab:01}.Other versions of these packages may well work,
+however the results of using an untested version can not be predicted.
+
+\begin{table}
+{\scriptsize
+\begin{tabularx}{100pt}{@{}cc@{}}\toprule
+Package	& Tested Version \\\midrule
+bio-bwa		&	0.7.15 \\
+cutadapt	&	1.10 \\
+fastqc		&	0.11.2 \\
+freebayes	&	1.1.0 \\
+gatk		&	3.6 \\
+picard		&	2.6.0 \\
+sambamba	&	0.6.5 \\
+samtools	&	1.3.1 \\
+trim\_galore	&	0.4.1 \\
+vt	&	0.5.77 \\\hline
+\end{tabularx}}{}
+\caption{Prerequisite software packages used by pipeline.\label{tab:01}} 
+\end{table}
+
+\section {Running the Pipeline}
+
+The pipeline has been designed to be as easy as possible to run, and consists
+of two major stages: Carrying out per-sample analysis and variant calling,
+followed by the creation of the variable site alignment from the outputs of the
+per-sample analysis. A separate instance of the per-sample analysis is executed
+on multiple cluster nodes in parallel to minimise runtime, while the generation
+of the variable site alignment is carried out by a single process on one node.
+
+\subsection {Preparing to run the pipeline}
+
+The following data are required to run the pipeline:
+
+\begin{tight_enumerate}
+\item A pair of gzip compressed fastq files for each isolate. 
+\item A fasta-formatted genome sequence of the reference isolate
+\item A BED file describing hypervariable regions of the reference genome to exclude from the VSA.
+\end{tight_enumerate}
+
+\subsubsection {Input Sequences}
+
+A new directory should be created for the input sequences for each pipeline
+run. This should contain a separate directory for each sample, named with the
+sample name, and contain the fastq files for the sample, named
+[sample]\_1.fastq.gz and [sample]\_2.fastq.gz. No other files/directories
+should be placed in the input directory since a list of samples to be analysed
+will be determined by the software from a listing of the contents of this
+directory.
+
+\subsubsection {Reference genome}
+
+The sequence of the isolate to be used as a reference should be available as a
+fasta format file. An appropriately formatted file is availabe in the {\tt
+data} directory of the pipeline installation for the H37Rv isolate. 
+
+\subsection {Hypervariable regions}
+
+A list of genomic regions to exclude from the analysis (i.e. highly variable
+regions which do not aid phylogenetic analysis ) can optionally be provided as
+a BED format file. The BED format is a tab-delimted file format using one line
+per feature, with 3-12 columns used to describe genomic locations. The pipeline
+only requires the first three columns, which describe the reference identifier,
+the start co-ordinate of the region and the end co-ordinate. Co-ordinates are
+0-based, meaning the first base of the reference sequence is numbered base 0.
+An example of part of valid BED file is shown in figure \ref{fig:1}.
+
+%TODO: add real example...
+\begin{figure}
+	\hrulefill
+	\begin{verbatim}
+ref1	loc1	loc2	desc
+ref2	loc1	loc2	desc
+	\end{verbatim}
+	\hrulefill
+	\caption{Example of BED format file describing regions to be excluded from analysis}\label{fig:1}
+\end{figure}
+
+An example BED file for the H37Rv isolate is provided in the {\tt data}
+directory of the pipeline installation.
+
+\subsection {Running per-sample analysis}
+
+\subsubsection {Cluster submission}
+
+The pipeline is designed to be run on a cluster running the PBSPro job
+scheduling software, with specific configurations defined for the Imperial
+College HPC cx1 cluster. Modification to use different cluster
+configurations/middleware will require the the lines beginning {\tt \#PBS} in
+the {\tt tb\_pipeline\_run} and {\tt build\_vsa\_run} scripts to be updated
+according to the desired cluster configuration/queueing system. Additionaly the
+{\tt qsub} commands in {\tt submit\_tb\_run} and {\tt submit\_build\_vsa} will need
+to be updated to suit the syntax of the required queue submission command. 
+
+A single script ({\tt submit\_tb\_run}) needs to be run to carry out job
+submission of the per-sample analysis for an entire dataset. Basic usage
+information can be obtained by running the script without any arguments:
+
+\begin{verbatim}
+[jamesa@wssb-james colijn]$ submit_tb_run 
+Usage: submit_tb_run -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference
+\end{verbatim}
+
+The script requires three arguments:
+
+\begin{itemize}
+\item \textbf{-i}: Path to input directory. The fully-qualified path to
+the directory described above containing a subdirectory of compressed fastq
+files for each sample.
+ \item \textbf{-o}: Path to output directory. The fully-qualiied path to a
+directory for storing intermediate run files and outputs in per-sample
+subdirectories. This directory will be created automatically if it doesn't
+exist. 
+\item \textbf{-r}: Path to reference. The fully qualified path to the
+fasta-formatted genome sequence of the reference isolate.
+\end{itemize}
+
+The script will determine the number of samples being analysed by obtaining a
+directory listing of the specified input directory, then submit an array job to
+the cluster for the relevent number of tasks, with one task per sample. The
+progress of these jobs can be monitored using the {\tt qstat -f} command i.e. 
+
+\begin{verbatim}
+TODO: add real qstat -f output
+\end{verbatim}
+
+Each task will execute a single instance of the {\tt tb\_pipeline\_run} script,
+which is a queue execution wrapper around {\tt analyse\_tb\_sample}.
+
+\subsubsection {Analysing a single sample}
+
+Individual sample analysis can be running the {\tt analyse\_tb\_sample} command
+directly e.g for running outside a cluster environment. It's usage is as follows:
+
+\begin{verbatim}
+analyse_tb_sample --input input_directory --output output_directory \
+   --reference /path/to/reference.fasta
+\end{verbatim}
+
+%TODO - allow samples to be specififed by argument
+\begin{itemize}
+\item \textbf{--input}: Path to input directory. The fully-qualified path to
+the directory described above containing a subdirectory of compressed fastq
+files for each sample.
+ \item \textbf{-output}: Path to output directory. The fully-qualiied path to a
+directory for storing intermediate run files and outputs in per-sample
+subdirectories. This directory will be created automatically if it doesn't
+exist. 
+\item \textbf{-reference}: Path to reference. The fully qualified path to the
+fasta-formatted genome sequence of the reference isolate.
+\end{itemize}
+
+Note that the script will refuse to run if an output directory already exists
+for the defined sample, consequently it will be necessary to remove existing
+output directories or specifiy a different output directory should it be
+necessary to rerun the analysis of any samples. 
+
+\subsubsection{Identifying failed tasks}
+
+There is a possiblity that individual sample analysis jobs may fail, for
+example if they exceed the job limits defined by the submission script i.e.
+memory requirement, or runtime. Following the completion of all the scheduled
+tasks, it is possible to identify any which have failed using the {\tt
+find\_failed\_tasks} script.
+
+\begin{verbatim}
+find_failed_tasks --input input_directory --output output_directory [--clean]
+\end{verbatim}
+
+\begin{itemize}
+\item \textbf{--input}: Path to input directory specified during job submission
+\item \textbf{--output}: Path to output directory specified during job submission
+\item \textbf{--clean} (optional): Remove output directories of failed jobs
+\end{itemize}
+
+When run, this script will report any samples which have failed the analysis
+run. The standard output/standard error of any failed tasks should be inspected
+to identify the cause of the failure. 
+
+The script can also be run with the {\tt clean} flag which will remove the
+output directory of any failed samples. Once the cause of the job failures has
+been addressed, {\tt submit\_tb\_run} should be rerun as before. Any samples which
+have existing output directories will be skipped, while those which are missing
+from previously failed jobs will be rerun. 
+
+This process should be repeated until all samples have successfully completed analysis.
+
+\subsubsection{Generating a variable site alignment}
+
+Once all the tasks have successfully completed, the {\tt build\_vsa} script can
+be used to generate a variable site alignment from the samples. This can be run
+interactively if resources allow, or submitted to a cluster using the {\tt
+submit\_build\_vsa} script. Note that when run on the Imperial HPC systems, the
+job should be submitted to cx1.
+
+
+\section{Pipeline Workflow}
+
+\subsection{QC}
+
+\subsection{Read Trimming}
+
+\subsection{Read Alignment}
+
+
+\end{document}
