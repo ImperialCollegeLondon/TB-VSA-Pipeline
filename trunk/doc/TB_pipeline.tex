@@ -95,6 +95,8 @@ is not necessarily generally applicable to other species.
 
 \subsection{Prerequisites}
 
+\subsubsection{Software packages}
+
 A number of software packages are necessary to run this pipeline. These should
 be installed so that their binaries are available on the default path in the
 environment the software will be executed under. If run on the cx1 cluster, the
@@ -119,6 +121,37 @@ trim\_galore	&	0.4.1 \\
 vt	&	0.5.77 \\\hline
 \end{tabularx}}{}
 \caption{Prerequisite software packages used by pipeline.\label{tab:01}} 
+\end{table}
+
+\subsubsection{Perl Modules}
+
+Certain Perl modules also need to be available. These should be installed
+either into a centralised location which is on the perl library path
+\$PERL5LIB, or the {\tt 'lib'} directory within the pipeline installation
+directory which is also included on the \$PERL5LIB path. The necessary perl
+modules are indicated in table \ref{tab:02}. Note that those indicated as
+'core' modules are shipped with Perl so are likely to be already available.
+
+\begin{table}
+{\scriptsize
+\begin{tabularx}{250pt}{@{}ccc@{}}\toprule
+Module & Core? & Notes \\\midrule
+Archive::Zip & No & Only required for download scripts \\
+BioPerl & NO & \\
+Cwd & Yes & \\
+Digest::MD5::File & No & Only required for download scripts  \\
+File::Basename & Yes & \\
+File::Path & Yes & \\
+FindBin & Yes & \\
+Getopt::Long & Yes & \\
+IPC::Cmd & Yes & \\
+IPC::Open3 & Yes & \\
+LWP::UserAgent & No & Only required for download scripts  \\
+Pod::Usage & Yes & \\
+XML::XPath & No & Only required for download scripts \\
+XML::XPath::Parser & No & Only required for download scripts \\\hline
+\end{tabularx}}{}
+\caption{Required Perl modules.\label{tab:02}} 
 \end{table}
 
 \section {Running the Pipeline}
