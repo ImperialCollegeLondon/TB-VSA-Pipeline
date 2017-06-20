@@ -53,7 +53,6 @@ use Getopt::Long;
 use Pod::Usage;
 use Bio::SeqIO;
 use Bio::Seq;
-use Data::Dumper;
 
 {
     my ( $in_dir, $reference, $out_dir, $exclude, $help, $man );
