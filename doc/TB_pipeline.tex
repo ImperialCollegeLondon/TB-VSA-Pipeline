@@ -1,13 +1,10 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% $HeadURL$
-% $Author$
-% $Revision$
-% $Date$
-%
-% Colijn TB Pipeline documentation
+% TB VSA Pipeline documentation
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%TODO: Add references
 
 \documentclass[a4paper,10pt,twoside]{article}
 
@@ -24,6 +21,8 @@
 \usepackage{fancyhdr} 
 \usepackage{framed}
 \usepackage[dvipsnames]{xcolor}
+\usepackage{fancyvrb}
+\usepackage{hyperref}
 
 \linespread{1.05}
 \setlength{\headsep}{20pt}
@@ -54,6 +53,12 @@
   \setlength{\parskip}{0pt}
 }{\end{enumerate}}
 
+\newenvironment{tight_itemize}{
+\begin{itemize}
+  \setlength{\itemsep}{0pt}
+  \setlength{\parskip}{0pt}
+}{\end{itemize}}
+
 \title{TB Variable Site Alignment Pipeline}
 \date{\today}
 \author{James Abbott (j.abbott\@imperial.ac.uk)}
@@ -66,20 +71,26 @@
 
 \section{Introduction}
 
-This document describes the pipeline produced for Caroline Colijn to generate
-variable-site alignments (VSA) of populations of TB isolates from paired-end
-Illumina WGS data. The pipeline carries out data QC and read-trimming/adapter
-removal, followed by alignment of the sequence reads to a reference TB strain
-using BWA.  Duplicate reads are marked, and local realignment of reads around
-potential indel sites is then carried out. SNVs are then identified using
-FreeBayes. An alignment consisiting of only the variable sites in the
-population is then created excluding hypervariable regions.
+This document describes a pipeline for generating variable-site alignments
+(VSA) of populations of Mycobacterium tuberculosis isolates from paired-end
+Illumina WGS data. This has been produced on behalf of Caroline Colijn, Dept of
+Mathematics, Imperial College London. The pipeline carries out data QC and
+read-trimming/adapter removal, followed by alignment of the sequence reads to a
+reference TB strain using BWA.  Duplicate reads are marked, and local
+realignment of reads around potential indel sites is then carried out. SNVs are
+then identified using FreeBayes. An alignment consisting of only the variable
+sites in the population is then created excluding hyper-variable regions.
 
-The pipeline has been designed to run on a cluster (cx1) under a batch queing
+The pipeline has been designed to run on a cluster (cx1) under a batch queuing
 system (PBS Pro). Moving the software to run under a different environment will
 require modification of PBS directives etc. accordingly.
 
+Note that this pipeline has been produced specifically for TB isolates,
+considering the low recombination rates present in this organism, consequently
+is not necessarily generally applicable to other species.
+
 \section{Installation}
+
 %TODO
 
 \subsection{Prerequisites}
@@ -126,7 +137,7 @@ The following data are required to run the pipeline:
 \begin{tight_enumerate}
 \item A pair of gzip compressed fastq files for each isolate. 
 \item A fasta-formatted genome sequence of the reference isolate
-\item A BED file describing hypervariable regions of the reference genome to exclude from the VSA.
+\item A BED file describing hyper-variable regions of the reference genome to exclude from the VSA.
 \end{tight_enumerate}
 
 \subsubsection {Input Sequences}
@@ -142,28 +153,32 @@ directory.
 \subsubsection {Reference genome}
 
 The sequence of the isolate to be used as a reference should be available as a
-fasta format file. An appropriately formatted file is availabe in the {\tt
+fasta format file. An appropriately formatted file is available in the {\tt
 data} directory of the pipeline installation for the H37Rv isolate. 
 
-\subsection {Hypervariable regions}
+\subsection {Hyper-variable regions}
 
 A list of genomic regions to exclude from the analysis (i.e. highly variable
 regions which do not aid phylogenetic analysis ) can optionally be provided as
-a BED format file. The BED format is a tab-delimted file format using one line
+a BED format file. The BED format is a tab-delimited file format using one line
 per feature, with 3-12 columns used to describe genomic locations. The pipeline
 only requires the first three columns, which describe the reference identifier,
 the start co-ordinate of the region and the end co-ordinate. Co-ordinates are
 0-based, meaning the first base of the reference sequence is numbered base 0.
-An example of part of valid BED file is shown in figure \ref{fig:1}.
+An example of part of valid BED file is shown in figure \ref{fig:1}. 
 
-%TODO: add real example...
 \begin{figure}
-	\hrulefill
-	\begin{verbatim}
-ref1	loc1	loc2	desc
-ref2	loc1	loc2	desc
-	\end{verbatim}
-	\hrulefill
+	\hrule
+	\vskip\smallskipamount
+	\begin{Verbatim}[baselinestretch=0.75]
+AL123456.3       3736984         3738438
+AL123456.3       1541994         1542980
+AL123456.3       2430159         2431199
+AL123456.3       2784657         2785697
+AL123456.3       3120566         3121552 
+\end{Verbatim}
+	\hrule
+	\vskip\smallskipamount
 	\caption{Example of BED format file describing regions to be excluded from analysis}\label{fig:1}
 \end{figure}
 
@@ -177,9 +192,9 @@ directory of the pipeline installation.
 The pipeline is designed to be run on a cluster running the PBSPro job
 scheduling software, with specific configurations defined for the Imperial
 College HPC cx1 cluster. Modification to use different cluster
-configurations/middleware will require the the lines beginning {\tt \#PBS} in
+configurations/middleware will require the lines beginning {\tt \#PBS} in
 the {\tt tb\_pipeline\_run} and {\tt build\_vsa\_run} scripts to be updated
-according to the desired cluster configuration/queueing system. Additionaly the
+according to the desired cluster configuration/queueing system. Additionally the
 {\tt qsub} commands in {\tt submit\_tb\_run} and {\tt submit\_build\_vsa} will need
 to be updated to suit the syntax of the required queue submission command. 
 
@@ -194,21 +209,21 @@ Usage: submit_tb_run -i /path/to/input/dir -o /path/to/output/dir -r /path/to/re
 
 The script requires three arguments:
 
-\begin{itemize}
+\begin{tight_itemize}
 \item \textbf{-i}: Path to input directory. The fully-qualified path to
 the directory described above containing a subdirectory of compressed fastq
 files for each sample.
- \item \textbf{-o}: Path to output directory. The fully-qualiied path to a
+ \item \textbf{-o}: Path to output directory. The fully-qualified path to a
 directory for storing intermediate run files and outputs in per-sample
 subdirectories. This directory will be created automatically if it doesn't
 exist. 
 \item \textbf{-r}: Path to reference. The fully qualified path to the
 fasta-formatted genome sequence of the reference isolate.
-\end{itemize}
+\end{tight_itemize}
 
 The script will determine the number of samples being analysed by obtaining a
 directory listing of the specified input directory, then submit an array job to
-the cluster for the relevent number of tasks, with one task per sample. The
+the cluster for the relevant number of tasks, with one task per sample. The
 progress of these jobs can be monitored using the {\tt qstat -f} command i.e. 
 
 \begin{verbatim}
@@ -228,27 +243,26 @@ analyse_tb_sample --input input_directory --output output_directory \
    --reference /path/to/reference.fasta
 \end{verbatim}
 
-%TODO - allow samples to be specififed by argument
-\begin{itemize}
+\begin{tight_itemize}
 \item \textbf{--input}: Path to input directory. The fully-qualified path to
 the directory described above containing a subdirectory of compressed fastq
 files for each sample.
- \item \textbf{-output}: Path to output directory. The fully-qualiied path to a
+ \item \textbf{-output}: Path to output directory. The fully-qualified path to a
 directory for storing intermediate run files and outputs in per-sample
 subdirectories. This directory will be created automatically if it doesn't
 exist. 
 \item \textbf{-reference}: Path to reference. The fully qualified path to the
 fasta-formatted genome sequence of the reference isolate.
-\end{itemize}
+\end{tight_itemize}
 
 Note that the script will refuse to run if an output directory already exists
 for the defined sample, consequently it will be necessary to remove existing
-output directories or specifiy a different output directory should it be
+output directories or specific a different output directory should it be
 necessary to rerun the analysis of any samples. 
 
 \subsubsection{Identifying failed tasks}
 
-There is a possiblity that individual sample analysis jobs may fail, for
+There is a possibility that individual sample analysis jobs may fail, for
 example if they exceed the job limits defined by the submission script i.e.
 memory requirement, or runtime. Following the completion of all the scheduled
 tasks, it is possible to identify any which have failed using the {\tt
@@ -258,11 +272,11 @@ find\_failed\_tasks} script.
 find_failed_tasks --input input_directory --output output_directory [--clean]
 \end{verbatim}
 
-\begin{itemize}
+\begin{tight_itemize}
 \item \textbf{--input}: Path to input directory specified during job submission
 \item \textbf{--output}: Path to output directory specified during job submission
 \item \textbf{--clean} (optional): Remove output directories of failed jobs
-\end{itemize}
+\end{tight_itemize}
 
 When run, this script will report any samples which have failed the analysis
 run. The standard output/standard error of any failed tasks should be inspected
@@ -282,16 +296,172 @@ Once all the tasks have successfully completed, the {\tt build\_vsa} script can
 be used to generate a variable site alignment from the samples. This can be run
 interactively if resources allow, or submitted to a cluster using the {\tt
 submit\_build\_vsa} script. Note that when run on the Imperial HPC systems, the
-job should be submitted to cx1.
+job should be submitted to cx1's queues.
 
+\begin{Verbatim}
+submit_build_vsa -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference \
+	-e /patch/to/exclude.bed
+\end{Verbatim}
+
+The following arguments should be passed to the {\tt submit\_build\_vsa} script:
+
+\begin{tight_itemize}
+\item \textbf{-i}: Path to input directory specified during job submission
+\item \textbf{-o}: Path to output directory specified during job submission
+\item \textbf{-r}: Path to fasta formatted reference sequence
+\item \textbf{-e}: Path to bed format file describing genomic regions to exclude from VSA
+\end{tight_itemize}
+
+The resulting variable site alignment will be written to the output directory
+as a fasta-formatted alignment, along with an index file indicating the genomic
+locus represented by each position of the alignment.
 
 \section{Pipeline Workflow}
 
+The pipeline consists of a series of operations. Many of the tools and
+algorithms used can be readily replaced with alternatives if desired, or
+runtime parameters altered by editing the command lines defined in the {\tt
+analyse\_tb\_sample} script. 
+
 \subsection{QC}
 
-\subsection{Read Trimming}
+An assessment of sequence quality is initially carried out using FastQC. This
+carries out a separate quality assessment on each of read-pairs taking account
+of a considerable number of metrics. A rating of PASS, WARN or FAIL is assigned
+for each metric. These ratings are somewhat arbitrary distinctions but for the
+most part hold true. It is also important to understand the basis of each
+metric and what may cause abnormal results. For example kmer content and
+overrepresented sequences may well result from adapter contaminations, which
+will be handled automatically by the pipeline. 
 
-\subsection{Read Alignment}
+Text format summaries are generated for each fastq file and can be found in the
+per-sample output directory name samplename\_fastqc.summary.txt. Should further
+investigation of the results be required, a {\tt fastqc} subdirectory is
+present in each sample output directory which contains HTML format outputs for
+each fastq file which can be viewed with a web browser. Documentation on
+interpreting the various quality statistics is available from
+\href{https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/3\%20Analysis\%20Modules}{'https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/3\%20Analysis\%20Modules/'}.
 
+\subsection{Read trimming}
 
+Reads are next trimmed using trim\_galore to remove residual adapter sequences
+and bases of low quality. Bases with with quality scores below 20 are removed
+from the 3' end of the reads, as well as sequences matching standard Illumina
+adapters. Any reads which are shorter than 70bp following quality trimming are
+discarded.
+
+\subsection{Read alignment}
+
+Reads are aligned to the reference genome using the BWA MEM algorithm, using
+default parameters, and the outputs converted to bam format using sambamba.
+Read group information is then added to the bam files to ensure compatibilty
+with downstream tools such as GATK which require bam files to have read groups
+assigned. This process results in a sorted, indexed bam file which includes a
+{\tt RG} header line describing the read group, and an associated RG tag on
+each read.
+
+\subsection{Marking duplicates}
+
+Duplicate reads should occur at a very low frequency at the depths of
+sequencing typically employed, and add no meaningful information. PCR
+over-amplification can result in over-representation of particular reads which
+can influence variant calling accuracy. These duplicate reads therefore need to
+be identified and marked in the bam files to ensure they are not included in
+downstream analysis.  Duplicates are identified using Picard's MarkDuplicates
+tool, and the resulting bam file indexed.
+
+\subsection{Local realignment round indels}
+
+Each read-pair is aligned independently, resulting in the identification of the
+optimal alignment for each individual read pair. When reads span indel loci,
+the best alignment of each read-pair may differ between read-pairs resulting in
+some 'left-justified' alignments, and some which are 'right-justified' (see
+figure \ref{fig:2}). As well as not correctly representing the indel locus,
+these alignments also introduce a number of false-positive SNV loci in the
+region surrounding the indel. The process of local indel realignment identifies
+potential indel loci and carries out a realignment of the reads spanning this
+region, only carries out the alignment in the context of all the reads to
+produce a best alignment of all the reads together. This not only results in
+the indel being correctly represented in the alignments, but also removes the
+spurious SNV calls.
+
+Some variant callers carry out this process themselves, but to allow the
+variant caller in the pipeline to be readily substituted a standalone
+realignment task is carried out to allow the use of variant callers which do
+not take indel loci into account in this manner.  This is carried out using the
+GATK IndelRealigner tool. 
+
+\begin{figure}
+	\hrule
+	\vskip\smallskipamount
+	\begin{Verbatim}[baselinestretch=0.75]
+ref:    ttataaaac----aattaagt     ttataaaac----aattaagt
+sample: ttataaaacAAATaattaagt     ttataaaacAAATaattaagt
+        ---------------------     ---------------------
+read1:  ttataaaac    aaAtaa       ttataaaacAAATaa
+read2:  ttataaaac    aaAtaaTt     ttataaaacAAATaatt     
+read3:  ttataaaacAAATaattaagt     ttataaaacAAATaattaagt
+read4:      CaaaT    aattaagt             cAAATaattaagt 
+read5:        aaT    aattaagt               AATaattaagt
+read6:          T    aattaagt                 Taattaagt
+	\end{Verbatim}
+	\hrule
+	\vskip\smallskipamount
+	\caption{Example of misalignment surround indel locus, both before (left) and after (right) local indel realignment. Variant bases are indicated in upper case }\label{fig:2}
+\end{figure}
+
+\subsection{SNV calling}
+
+SNVs are identified using FreeBayes, a bayesian variant caller which allows
+ploidy to be taken into account when identifying variants. The current
+iteration of the pipeline has been developed purely with SNVs in mind, so
+FreeBayes is run so as not to attempt identification of MNPs, INDELs or complex
+variants (which are combinations of other variant types). Standard quality
+filters are used, requiring a minimum mapping quality of 30 and minimum base
+quality of 20. The minimum alternate fraction is also defined as 0.8, which
+will only reports on variants identified in >80\% of the reads at a locus. This
+helps reduce false-positives which is appropriate for sequence from a clonal
+isolate but will result in missed variant calls in clinical samples containing
+co-infecting isolates.
+
+The parameters used for FreeBayes variant calling are as follows:
+
+\begin{tight_itemize}
+\item \textbf{-p 1}: Ploidy = 1 (haploid)
+\item \textbf{-i}  : no INDELs
+\item \textbf{-X}  : no MNPs
+\item \textbf{-u}  : no complex
+\item \textbf{-j}  : use mapping quality
+\item \textbf{-0}  : standard quality filters - min mapping quality 30; min base quality 20; min supporting allele qsum 0; genotype variant threshold 0
+\item \textbf{-F}  : min alternate fraction 0.8 
+\end{tight_itemize}
+
+\subsection{Generating variable-site alignment}
+
+The variable-site alignment is essentially a fasta-format multiple sequence
+alignment which excludes non-variant bases.  An array (@variants) is used to
+track which loci are variant, and is initialised with one element for each base
+of the reference, each element being set to '0'. The VCF output files from the
+variant calling are then sequentially processed, and variant loci in each
+sample parsed and stored in a hash (sample\_vars), keyed on the sample name and
+containing an array reference to a list of variant bases identified for the
+locus. For each variant identified at a locus, the value of the variants array
+representing the locus is incremented. 
+
+Once all VCF files have been parsed, the variants array is processed
+incrementally. When a variant locus is identified, each of the samples in the
+sample\_vars hash is examined and if a variant locus has been identified in
+that sample, then the variant base is included in the alignment for that
+sample, otherwise the corresponding reference allele is used. 
+
+Following processing of all variant loci, the alignment is written, including
+the loci from the reference sequence as the first line of the alignment. An
+index is also created mapping the base number of the alignment to the
+corresponding location on the reference genome.
+
+\textbf{N.B.} At present only a single variant base is included for each sample
+in the output alignment. This needs to be updated to produce the relevant IUPAC
+ambiguity code in the event that multiple variant bases are identified i.e in a
+non-clonal sample. 
+ 
 \end{document}
