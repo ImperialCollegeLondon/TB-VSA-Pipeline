@@ -85,13 +85,15 @@ use Data::Dumper;
     # @exclude is for tracking loci which should not be represented
     # in the variable site alignment
     my @exclude = ("0") x scalar(@ref_bases);
-    open EXCLUDE, $exclude or die "Error opening $exclude: $!";
-    while ( my @exclude_fields = split( /\t/, <EXCLUDE> ) ) {
-        for ( my $i = $exclude_fields[1] - 1 ; $i <= $exclude_fields[2] - 1 ; $i++ ) {
-            $exclude[$i] = 1;
+    if ($exclude) {
+        open EXCLUDE, $exclude or die "Error opening $exclude: $!";
+        while ( my @exclude_fields = split( /\t/, <EXCLUDE> ) ) {
+            for ( my $i = $exclude_fields[1] - 1 ; $i <= $exclude_fields[2] - 1 ; $i++ ) {
+                $exclude[$i] = 1;
+            }
         }
+        close EXCLUDE;
     }
-    close EXCLUDE;
 
     my $varlocs =
       {};    # hash keyed on sample id, each containing array representing reference bases to store identified variants
@@ -145,7 +147,7 @@ use Data::Dumper;
         # only include bases which are indicated as being variant, but not in the exclude list
         if ( $variants[$i] > 0 && $exclude[$i] == 0 ) {
             my $ref_allele = $ref_bases[$i];
-	    push @ref_alleles, $ref_allele;
+            push @ref_alleles, $ref_allele;
             foreach my $sample (@samples) {
                 $index{ $i + 1 }++;
                 my $sample_allele = $varlocs->{$sample}->[$i];
@@ -157,13 +159,13 @@ use Data::Dumper;
     }
 
     # reference sequence for vsa...
-    my $ref_loci_seq = Bio::Seq->new(-display_id=>$ref_id, -seq=>(join('',@ref_alleles)));
+    my $ref_loci_seq = Bio::Seq->new( -display_id => $ref_id, -seq => ( join( '', @ref_alleles ) ) );
 
-    my $outIO = Bio::SeqIO->new(-format=>'fasta', -file=>">$out_dir/variable_site_alignment.fa");
+    my $outIO = Bio::SeqIO->new( -format => 'fasta', -file => ">$out_dir/variable_site_alignment.fa" );
     $outIO->write_seq($ref_loci_seq);
     foreach my $sample (@samples) {
-	my $seq = Bio::Seq->new(-display_id=>$sample, -seq=>$sample_vars->{$sample});
-	$outIO->write_seq($seq);
+        my $seq = Bio::Seq->new( -display_id => $sample, -seq => $sample_vars->{$sample} );
+        $outIO->write_seq($seq);
     }
 
     open INDEX, ">$out_dir/variable_site_alignment.index"
