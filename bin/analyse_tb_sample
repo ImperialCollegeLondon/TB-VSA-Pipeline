@@ -405,7 +405,7 @@ sub call_snvs {
     # -F  : min alternate fraction 0.8 (need min 80% calls supporting variant)
 
     my $cmd = "freebayes -p 1 -i -X -u -j -0 -F 0.8 -f $reference $bam_file";
-    $cmd .= "|/home/jamesa/vt/vt normalize -r $reference - > $out_dir/$sample.vcf";
+    $cmd .= "|vt normalize -r $reference - > $out_dir/$sample.vcf";
     run_cmd($cmd);
 
     return (0)
