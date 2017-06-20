@@ -1,0 +1,6 @@
+*/*sw?
+doc/*.aux
+doc/*.log
+doc/*.toc
+doc/*.out
+
