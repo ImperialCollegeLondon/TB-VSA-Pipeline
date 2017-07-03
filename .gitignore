@@ -1,6 +1,11 @@
 */*sw?
+*sw?
 doc/*.aux
 doc/*.log
 doc/*.toc
 doc/*.out
+bin/lwp-*
+bin/xpath
+lib
+man
 
