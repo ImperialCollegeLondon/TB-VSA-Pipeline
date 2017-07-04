@@ -1,4 +1,4 @@
-#!__PERL__
+#!##PERL##
 
 use FindBin;
 use lib "$FindBin::Bin/../lib/perl5";
@@ -48,6 +48,9 @@ Email j.abbott@imperial.ac.uk
 
 use warnings;
 use strict;
+
+use FindBin;
+use local::lib "$FindBin::Bin/../lib/";
 
 use Getopt::Long;
 use Pod::Usage;

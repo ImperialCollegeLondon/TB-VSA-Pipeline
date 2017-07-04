@@ -12,11 +12,9 @@
 # ref: path to bwa-indexed reference fasta file 
 # exclude: path to bed file of hypervariable regions to exclude from analysis
 
-# JCA 020417
-
 #PBS -l select=1:ncpus=1:mem=64gb
 #PBS -l walltime=04:00:00
-#PBS -q med-bio
+##PBSQ_ENABLE###PBS -q ##PBSQ##
 #PBS -j oe
 
 

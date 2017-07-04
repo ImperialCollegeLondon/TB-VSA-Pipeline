@@ -2,21 +2,39 @@
 
 # Setup script to configure shebang lines/Queuing system/modules 
 
-# Replace __PERL__ placeholder in shebang lines with either the default system
-# perl or user-defined perl binary
-
 # ANSI colour codes for output highlighting
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NOCOL='\033[0m' 
 
+# First gather some info on the installation...
 perl=$(which perl)
 echo -n "Enter path to perl: [${perl}] "
 read user_perl
 
-if [ ! -z ${user_perl} ]; 
-then 
+if [ ! -z ${user_perl} ]; then 
 	perl=${user_perl}
+fi
+
+echo -n "If this software is to be run on a PBSpro cluster requiring job submission to a particular queue, enter the desired queue name (enter to skip): "
+read pbsqueue
+echo 
+
+cores=$(grep -c ^processor /proc/cpuinfo)
+echo -n "Enter number of parallel threads to use: [${cores}] "
+read user_cores
+echo
+
+if [ "${user_cores}" != "" ]; then
+	cores=${user_cores}
+fi
+
+# check to see if we are running on the ICL HPC CX1 cluster, in which case we
+# will need to add necessary 'module' lines to the scripts
+cx1=$(hostname --long|grep cx1)
+if [ ! ${cx1} == "\n" ]; then
+	echo "Configuring scripts for running on cx1 cluster"
+	echo
 fi
 
 if [ ! -e ${perl} ]; 
@@ -50,10 +68,27 @@ fi
 # installation directory
 mods=('Archive::Zip' 'Digest::MD5::File' 'LWP::UserAgent' 'XML::XPath'
 	'XML::XPath::Parser') 
+
 for mod in ${mods[@]}; do 
 	echo Installing ${mod}...
 	ret=$(perl -MCPAN -Mlocal::lib='./' -e "install(${mod})"  >/dev/null 2>&1) 
 done
 
-# rewrite files from src directory into bin via seddage...
-#sed -i s/__PERL__/${perl}/ bin/*
+echo
+echo Updating scripts...
+
+for file in $(ls src); do
+	cp src/${file} bin/${file}
+	sed -i "s|##PERL##|$perl|" bin/${file}
+	sed -i "s/##THREADS##/${cores}/" bin/${file}
+	
+	if [ ! ${cx1} == "\n" ]; then
+		sed -i 's/##CX1##//g' bin/${file}
+	fi
+
+	if [ ! -z "${pbsqueue}" ]; then
+		sed -i "s/##PBSQ_ENABLE##//" bin/${file}
+		sed -i "s/##PBSQ##/$pbsqueue/" bin/${file}
+	fi
+	chmod +x bin/${file}
+done

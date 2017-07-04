@@ -1,4 +1,4 @@
-#!__PERL__
+#!##PERL##
 
 =pod
 
@@ -40,6 +40,9 @@ saves them in the specified directory
 Email j.abbott@imperial.ac.uk
 
 =cut
+
+use FindBin;
+use local::lib "$FindBin::Bin/../";
 
 use warnings;
 use strict;
