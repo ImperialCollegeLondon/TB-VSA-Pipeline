@@ -8,4 +8,8 @@ bin/lwp-*
 bin/xpath
 lib
 man
+bin/analyse_tb_sample
+bin/build_vsa
+bin/download_ena_project
+bin/find_failed_tasks
 
