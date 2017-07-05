@@ -1,9 +1,9 @@
 */*sw?
 *sw?
-doc/*.aux
-doc/*.log
-doc/*.toc
-doc/*.out
+docs/*.aux
+docs/*.log
+docs/*.toc
+docs/*.out
 bin/lwp-*
 bin/xpath
 lib
