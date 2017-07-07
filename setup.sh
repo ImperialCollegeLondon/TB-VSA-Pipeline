@@ -66,7 +66,7 @@ fi
 
 # Install prerequisite non-core perl modules into lib directory within
 # installation directory
-mods=('Archive::Zip' 'Digest::MD5::File' 'LWP::UserAgent' 'XML::XPath'
+mods=('Archive::Zip' 'Digest::MD5::File' 'LWP::UserAgent' 'Statistics::Descriptive' 'XML::XPath'
 	'XML::XPath::Parser') 
 
 for mod in ${mods[@]}; do 
