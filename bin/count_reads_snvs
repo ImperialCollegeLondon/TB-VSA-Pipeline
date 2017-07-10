@@ -1,8 +1,0 @@
-#!/bin/bash
-
-for dir in $(ls -1|grep -v -e var -e count) ;
-do
-    let reads=$(zcat ${dir}/${dir}_1_val_1.fq.gz|wc -l)/4
-    vars=$(grep -vc ^# ${dir}/${dir}.vcf)
-    echo -e "${dir}\t${reads}\t$vars"
-done

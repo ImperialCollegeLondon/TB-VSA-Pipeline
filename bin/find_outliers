@@ -1,0 +1,54 @@
+#!/bin/bash -e
+
+# Script to consolidate per-sample stats and identify outliers 
+# plot_coverage_snpcounts.R. 
+
+usage="Usage: $0 -i /path/to/input/dir -r /path/to/reference/seq" 
+real_path=$(realpath $0)
+bin_dir=$(dirname ${real_path})
+
+while getopts ":i:r:h" opt; do
+        case $opt in 
+                i)
+                in_dir=$OPTARG
+                ;;
+		r)
+		ref=$OPTARG
+		;;
+                h)
+                echo $usage
+                exit 0
+                ;;
+                \?)
+                echo "Invalid option: -$OPTARG" >&2
+                echo $usage >&2
+                exit 1
+                ;;
+        esac
+done
+
+if [ -z "${in_dir}" ] || [ -z "${ref}" ]; then
+	echo $usage
+	exit 1
+fi
+
+project=$(basename ${in_dir})
+
+cd ${in_dir}
+echo -e "Sample\tReads\tReadLength\tSNVs\tMappingRate" > ${project}.stats.txt
+
+for dir in $(find ${in_dir}/* -type d -prune) ; do
+	(( count = ${count} + 1 ))
+	stat_file=$(ls -1 ${dir}|grep basic)
+	flagstat_file=$(ls -1 ${dir}|grep flagstat)
+	line=$(cat ${dir}/${stat_file})
+	mapped=$(sed -n '5p' ${dir}/${flagstat_file}|awk '{print $5}'|sed 's/[\(]//;s/%:N\/A[\)]//')
+	echo -e "${line}\t${mapped}" >> ${project}.stats.txt
+done
+
+ref_length=$(cat ${ref}|grep -v '>'|wc -c)
+
+pwd
+${bin_dir}/outlier_plots.R -d ${project}.stats.txt -l ${ref_length} -p ${project}
+
+

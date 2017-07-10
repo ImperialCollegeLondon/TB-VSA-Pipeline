@@ -50,11 +50,13 @@ use warnings;
 use strict;
 
 use Archive::Zip;
+use Bio::SeqIO;
 use File::Basename;
 use File::Path qw(make_path);
 use Getopt::Long;
 use IPC::Cmd qw(run);
 use Pod::Usage;
+use Statistics::Descriptive;
 
 # N.B. sambamba has a version number embedded in it's filename
 # so commands will need updating if this version is updated
@@ -128,14 +130,19 @@ our $threads = ##THREADS##;
     my $fq_read2       = "$in_dir/$sample/$read2";
     my $sample_out_dir = "$out_dir/$sample";
 
+
     run_fastqc( $fq_read1, $fq_read2, $sample_out_dir );
     trim_reads( $fq_read1, $fq_read2, $sample_out_dir );
+
+	
     align_reads( $sample, "$in_dir/$sample/$read1", "$in_dir/$sample/$read2", $reference, "$out_dir/$sample" );
     add_read_groups( "$out_dir/$sample//$sample.sorted.bam", $sample );
     mark_duplicates("$out_dir/$sample/$sample.sorted.rg.bam");
     realign_indels( "$out_dir/$sample/$sample.no_dup.bam", $reference, $sample_out_dir );
     call_snvs( "$out_dir/$sample/$sample.realigned.bam", $reference, $sample_out_dir, $sample );
-    gather_statistics( "$out_dir/$sample", $sample, $reference );
+	
+
+    gather_statistics( "$out_dir/$sample", $sample, $reference);
 
     # add an flag to the outputs if we have got this far ok
     open DONE_FLAG, ">$out_dir/$sample/$sample.all_done";
@@ -433,6 +440,40 @@ sub gather_statistics {
     my $sample    = shift;
     my $reference = shift;
 
+    # gather some basic stats on the reads....
+    my $read_count = `echo \$(( \$(zcat ${out_dir}/${sample}_1_val_1.fq.gz|wc -l)/4 ))`;
+    chomp $read_count;
+    print "reads = $read_count\n";
+
+    my @read_lengths;
+    open FASTQ, "gunzip -c ${out_dir}/${sample}_1_val_1.fq.gz | " or die "Could not open ${out_dir}/${sample}_1_val_1.fq.gz";
+    for (my $i=0;$i<=5000;$i++) {
+    	<FASTQ>;
+    	my $read=<FASTQ>;
+    	push @read_lengths, length($read);
+    	<FASTQ>;
+    	<FASTQ>;
+    }       
+    close FASTQ;
+
+    my $stat = Statistics::Descriptive::Full->new();
+    $stat->add_data(@read_lengths);
+    my $ave_read_length = sprintf("%d",$stat->mean());
+    print "Ave read length = $ave_read_length\n";
+
+    my $var_count=0;
+    open VCF, "${out_dir}/${sample}.vcf" or die "Error opening ${out_dir}/${sample}.vcf: $!";
+    while (<VCF>) {
+       	next if /^#/;
+    	$var_count++;
+    }
+    close VCF;
+        
+    open STATS, ">${out_dir}/${sample}_basic_stats.txt" or die 
+    	"Error: could not open ${out_dir}/${sample}_basic_stats.txt: $!";
+    print STATS "$sample\t${read_count}\t${ave_read_length}\t${var_count}\n";
+    close STATS;
+
     my $cmd = "picard CollectWgsMetrics I=$out_dir/$sample.realigned.bam";
     $cmd .= " O=$out_dir/$sample.wgs_metrics.txt R=$reference";
     run_cmd($cmd);
@@ -443,3 +484,5 @@ sub gather_statistics {
 
     return;
 }
+
+
