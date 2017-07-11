@@ -5,6 +5,8 @@ docs/*.log
 docs/*.toc
 docs/*.out
 bin/lwp-*
+bin/bp_*
+bin/cpanm
 bin/xpath
 lib
 man
