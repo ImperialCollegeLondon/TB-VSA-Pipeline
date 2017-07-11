@@ -9,11 +9,11 @@
 
 # JCA 210317
 
-usage="Usage: $0 -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference -e /patch/to/exclude.bed"
+usage="Usage: $0 -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference -e /path/to/exclude.bed -x /path/to/outliers.txt"
 real_path=$(realpath $0)
 bin_dir=$(dirname ${real_path})
 
-while getopts ":i:o:r:e:h" opt; do
+while getopts ":i:o:r:e:x:h" opt; do
         case $opt in 
                 i)
                 in_dir=$OPTARG
@@ -26,6 +26,9 @@ while getopts ":i:o:r:e:h" opt; do
 		;;
 		e)
 		exclude=$OPTARG
+		;;
+		x)
+		outliers=$OPTARG
 		;;
                 h)
                 echo $usage
@@ -71,7 +74,13 @@ then
     exit 1
 fi;
 
-cmd="qsub -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${ref},exclude=${exclude} ${bin_dir}/build_vsa_run"
+if ! [ -e ${outliers} ];
+then
+    echo "Outlier file  ${outliers} does not exist"
+    exit 1
+fi;
+
+cmd="qsub -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${ref},exclude=${exclude},outliers=${outliers} ${bin_dir}/build_vsa_run"
 
 echo
 echo "running command: $cmd"

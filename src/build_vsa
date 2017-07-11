@@ -75,8 +75,12 @@ use Bio::Seq;
     die "$in_dir does not exist"    unless ( -d $in_dir );
     die "$reference does not exist" unless ( -e $reference );
     die "$exclude does not exist"   unless ( defined($exclude) && -e $exclude );
-	die "$outliers does not exist" unless (defined($outliers) && -e $outliers );
+    if (defined($outliers) && ($outliers ne "")) {
+	die "$outliers does not exist" unless -e $outliers
+    } 
 
+    unlink("$out_dir/variable_site_alignment.fa");
+    unlink("$out_dir/variable_site_alignment.index");
     my $refIO     = Bio::SeqIO->new( -file => $reference, -format => 'fasta' );
     my $ref       = $refIO->next_seq();
     my $ref_id    = $ref->display_id();

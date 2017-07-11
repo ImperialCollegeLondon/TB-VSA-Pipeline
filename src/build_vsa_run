@@ -48,7 +48,12 @@ then
     exit 1
 fi
 
-cmd="${bin_dir}/build_vsa --input ${in_dir} --output ${out_dir} --reference ${ref} --exclude ${exclude}"
+if [ -z ${outliers} ];
+then
+    echo outliers variable not set
+    exit 1
+fi
+cmd="${bin_dir}/build_vsa --input ${in_dir} --output ${out_dir} --reference ${ref} --exclude ${exclude} --outliers ${outliers}"
 
 echo
 echo "Running cmd: ${cmd}"
