@@ -2,10 +2,13 @@
 
 # Setup script to configure shebang lines/Queuing system/modules 
 
+real_path=$(realpath $0)
+bin_dir=$(dirname ${real_path})
+
 # ANSI colour codes for output highlighting
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-NOCOL='\033[0m' 
+NOCOL='\033[0m'
 
 # First gather some info on the installation...
 perl=$(which perl)
@@ -66,13 +69,17 @@ fi
 
 # Install prerequisite non-core perl modules into lib directory within
 # installation directory
-mods=('Archive::Zip' 'Digest::MD5::File' 'LWP::UserAgent' 'Statistics::Descriptive' 'XML::XPath'
-	'XML::XPath::Parser') 
+mods=('App::cpanminus Archive::Zip' 'Digest::MD5::File' 'File::Find::Rule' 'LWP::UserAgent' 
+	'Statistics::Descriptive' 'XML::XPath' 'XML::XPath::Parser') 
 
 for mod in ${mods[@]}; do 
 	echo Installing ${mod}...
-	ret=$(perl -MCPAN -Mlocal::lib='./' -e "install(${mod})"  >/dev/null 2>&1) 
+	ret=$(perl -MCPAN -Mlocal::lib='./' -e "install (${mod})"  >/dev/null 2>&1) 
 done
+
+# Bioperl has an interactive installation which can be bypassed with cpanm
+echo Installing Bio::Perl
+${bin_dir}/bin/cpanm -l'./' -f Bio::Perl
 
 echo
 echo Updating scripts...
