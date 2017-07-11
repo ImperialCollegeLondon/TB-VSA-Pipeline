@@ -20,11 +20,9 @@ alignment can be provided in a bed file using the '--exclude' argument.
 
 =over 4
 
-=item B<input>: Path to directory containing per-sample directories, with a vcf file named 'sample_name.vcf' in each directory
+=item B<dir>: Path to analysis directory, containing per-sample directories, with a vcf file named 'sample_name.vcf' in each directory
 
 =item B<reference>: Path to fasta formatted reference sequence.
-
-=item B<output>: Path to write output alignment file
 
 =back
 
@@ -55,13 +53,14 @@ use Getopt::Long;
 use Pod::Usage;
 use Bio::SeqIO;
 use Bio::Seq;
+use File::Basename;
+use File::Find::Rule;
 
 {
-    my ( $in_dir, $reference, $out_dir, $exclude, $outliers, $help, $man );
+    my ( $dir, $reference, $exclude, $outliers, $help, $man );
     GetOptions(
-                'input:s'     => \$in_dir,
+                'dir:s'     => \$dir,
                 'reference:s' => \$reference,
-                'output:s'    => \$out_dir,
                 'exclude:s'   => \$exclude,
 				'outliers:s'  => \$outliers,
                 'help'        => \$help,
@@ -70,17 +69,19 @@ use Bio::Seq;
     die "\nUnknown argument: @ARGV\n" if "@ARGV";
     my $message = "$0: Aligns and variant calls reads for a TB genome\n";
     pod2usage( verbose => 2, message => $message ) if ($man);
-    pod2usage( verbose => 1, message => $message ) if ( $help || !$in_dir || !$reference || !$out_dir );
+    pod2usage( verbose => 1, message => $message ) if ( $help || !$dir || !$reference );
 
-    die "$in_dir does not exist"    unless ( -d $in_dir );
+    die "$dir does not exist"    unless ( -d $dir );
     die "$reference does not exist" unless ( -e $reference );
     die "$exclude does not exist"   unless ( defined($exclude) && -e $exclude );
     if (defined($outliers) && ($outliers ne "")) {
 	die "$outliers does not exist" unless -e $outliers
     } 
 
-    unlink("$out_dir/variable_site_alignment.fa");
-    unlink("$out_dir/variable_site_alignment.index");
+    # Just in case there are leftovers....
+    unlink("$dir/variable_site_alignment.fa");
+    unlink("$dir/variable_site_alignment.index");
+
     my $refIO     = Bio::SeqIO->new( -file => $reference, -format => 'fasta' );
     my $ref       = $refIO->next_seq();
     my $ref_id    = $ref->display_id();
@@ -115,11 +116,13 @@ use Bio::Seq;
     my $sample_vars = {};    # hash keyed on sample id, each entry containing line of vsa
     my %index;               # ordered list of variant loci base positions
 
-    opendir IN, $in_dir or die "Error opening $in_dir: $!";
-    my @samples = grep !/\.\.?\z/, readdir IN;
-    close IN;
+    my @samples = File::Find::Rule->directory()->maxdepth(1)->in("$dir/");
+    
+    # File::Find::Rule includes the parent directory in the list which we don't want...
+    @samples = grep !/^$dir$/, @samples;
 
-    SAMPLE: foreach my $sample (@samples) {
+    SAMPLE: foreach my $sample_dir (@samples) {
+		my $sample=basename($sample_dir); 
 
 		if ($outliers{$sample}) {
 			print "$sample is an outlier...skipping\n";
@@ -127,9 +130,9 @@ use Bio::Seq;
 		}
 
         print "reading sample $sample...\n";
-        if ( ( -d "$in_dir/$sample" ) && ( -e "$in_dir/$sample/$sample.vcf" ) ) {
+        if ( ( -d "$dir/$sample" ) && ( -e "$dir/$sample/$sample.vcf" ) ) {
 
-            open VCF, "$in_dir/$sample/$sample.vcf" or die "Error opening $in_dir/$sample/$sample.vcf: $!";
+            open VCF, "$dir/$sample/$sample.vcf" or die "Error opening $dir/$sample/$sample.vcf: $!";
             my @sample_loci;
             while ( my $line = <VCF> ) {
                 next if ( $line =~ /^#/ );
@@ -157,7 +160,7 @@ use Bio::Seq;
             close VCF;
         }
         else {
-            die "No VCF file found in $in_dir/$sample...\n";
+            die "No VCF file found in $dir/$sample...\n";
         }
     }
     my @ref_alleles;
@@ -169,7 +172,8 @@ use Bio::Seq;
         if ( $variants[$i] > 0 && $exclude[$i] == 0 ) {
             my $ref_allele = $ref_bases[$i];
             push @ref_alleles, $ref_allele;
-            foreach my $sample (@samples) {
+            foreach my $sample_dir (@samples) {
+				my $sample = basename($sample_dir);
                 $index{ $i + 1 }++;
                 my $sample_allele = $varlocs->{$sample}->[$i];
                 ( defined($sample_allele) )
@@ -182,15 +186,16 @@ use Bio::Seq;
     # reference sequence for vsa...
     my $ref_loci_seq = Bio::Seq->new( -display_id => $ref_id, -seq => ( join( '', @ref_alleles ) ) );
 
-    my $outIO = Bio::SeqIO->new( -format => 'fasta', -file => ">$out_dir/variable_site_alignment.fa" );
+    my $outIO = Bio::SeqIO->new( -format => 'fasta', -file => ">$dir/variable_site_alignment.fa" );
     $outIO->write_seq($ref_loci_seq);
     foreach my $sample (@samples) {
+		$sample=basename($sample);
         my $seq = Bio::Seq->new( -display_id => $sample, -seq => $sample_vars->{$sample} );
         $outIO->write_seq($seq);
     }
 
-    open INDEX, ">$out_dir/variable_site_alignment.index"
-      or die "Error opening $out_dir/variable_site_alignment.index: $!";
+    open INDEX, ">$dir/variable_site_alignment.index"
+      or die "Error opening $dir/variable_site_alignment.index: $!";
     my $count = 1;
     print INDEX "Alignment Position\tReference location\n";
     foreach my $pos ( sort { $a <=> $b } keys(%index) ) {

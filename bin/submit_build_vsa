@@ -9,18 +9,15 @@
 
 # JCA 210317
 
-usage="Usage: $0 -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference -e /path/to/exclude.bed -x /path/to/outliers.txt"
+usage="Usage: $0 -d /path/to/dir -r /path/to/reference -e /path/to/exclude.bed -x /path/to/outliers.txt"
 real_path=$(realpath $0)
 bin_dir=$(dirname ${real_path})
 
-while getopts ":i:o:r:e:x:h" opt; do
+while getopts ":d:o:r:e:h" opt; do
         case $opt in 
-                i)
+                d)
                 in_dir=$OPTARG
                 ;;
-		o)
-		out_dir=$OPTARG
-		;;
 		r)
 		ref=$OPTARG
 		;;
@@ -43,23 +40,16 @@ while getopts ":i:o:r:e:x:h" opt; do
 done
 shift $((OPTIND-1))
 
-if [ -z ${in_dir} ] || [ -z ${out_dir} ] || [ -z ${ref} ] || [ -z ${exclude} ]; 
+if [ -z ${dir} ] || [ -z ${ref} ] || [ -z ${exclude} ]; 
 then
     echo $usage
     exit 1
 fi
 
-if ! [ -d ${in_dir} ]; 
+if ! [ -d ${dir} ]; 
 then
-    echo ${in_dir} does not exist
+    echo ${dir} does not exist
     exit 1
-fi;
-
-if ! [ -d ${out_dir} ];
-then
-    echo 
-    echo "Creating output directory ${out_dir}"
-    mkdir -v -p ${out_dir}
 fi;
 
 if ! [ -e ${ref} ];
@@ -80,7 +70,7 @@ then
     exit 1
 fi;
 
-cmd="qsub -v bin_dir=${bin_dir},in_dir=${in_dir},out_dir=${out_dir},ref=${ref},exclude=${exclude},outliers=${outliers} ${bin_dir}/build_vsa_run"
+cmd="qsub -v bin_dir=${bin_dir},dir=${dir},ref=${ref},exclude=${exclude},outliers=${outliers} ${bin_dir}/build_vsa_run"
 
 echo
 echo "running command: $cmd"
