@@ -4,8 +4,6 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%TODO: Add references
-
 \documentclass[a4paper,10pt,twoside]{article}
 
 \usepackage{float}
@@ -37,7 +35,7 @@
 \fancyhead{} % clear default header
 \fancyfoot{}  % clear default footer
 \fancyhead[L]{TB Variable Site Alignment Pipeline} % left justified header content
-\fancyhead[R]{Version 0.1.0} % right justified header content
+\fancyhead[R]{Version 0.1.2} % right justified header content
 \fancyfoot[LE,RO]{\thepage} %alternate page numbering
 \renewcommand{\familydefault}{\sfdefault} % set default font family
 \allsectionsfont{\sffamily\raggedright}
@@ -89,10 +87,6 @@ Note that this pipeline has been produced specifically for TB isolates,
 considering the low recombination rates present in this organism, consequently
 is not necessarily generally applicable to other species.
 
-\section{Installation}
-
-%TODO
-
 \subsection{Prerequisites}
 
 \subsubsection{Software packages}
@@ -107,40 +101,60 @@ however the results of using an untested version can not be predicted.
 
 \begin{table}
 {\scriptsize
-\begin{tabularx}{100pt}{@{}cc@{}}\toprule
-Package	& Tested Version \\\midrule
-bio-bwa		&	0.7.15 \\
-cutadapt	&	1.10 \\
-fastqc		&	0.11.2 \\
-freebayes	&	1.1.0 \\
-gatk		&	3.6 \\
-picard		&	2.6.0 \\
-sambamba	&	0.6.5 \\
-samtools	&	1.3.1 \\
-trim\_galore	&	0.4.1 \\
-vt	&	0.5.77 \\\hline
+\begin{tabularx}{400pt}{@{}lll@{}}\toprule
+Package	& Tested Version & Availability \\\midrule
+bwa		    &	0.7.15 & \url{http://bio-bwa.sourceforge.net} \\
+cutadapt	&	1.10  & \url{https://github.com/marcelm/cutadapt} \\
+fastqc		&	0.11.2 & \url{https://www.bioinformatics.babraham.ac.uk/projects/fastqc} \\
+freebayes	&	1.1.0 & \url{https://github.com/ekg/freebayes} \\
+gatk		&	3.6 & \url{https://software.broadinstitute.org/gatk} \\
+picard		&	2.6.0 & \url{https://broadinstitute.github.io/picard} \\
+sambamba	&	0.6.5 & \url{http://lomereiter.github.io/sambamba}\\
+samtools	&	1.3.1 & \url{http://www.htslib.org} \\
+trim\_galore	&	0.4.1 & \url{https://www.bioinformatics.babraham.ac.uk/projects/trim\_galore/} \\
+vt	&	0.5.77 & \url{http://genome.sph.umich.edu/wiki/Vt} \\\hline
 \end{tabularx}}{}
 \caption{Prerequisite software packages used by pipeline.\label{tab:01}} 
 \end{table}
 
-\subsubsection{Perl Modules}
+\subsubsection{Installing the pipeline}
 
-Certain Perl modules also need to be available. These should be installed
-either into a centralised location which is on the perl library path
-\$PERL5LIB, or the {\tt 'lib'} directory within the pipeline installation
-directory which is also included on the \$PERL5LIB path. The necessary perl
-modules are indicated in table \ref{tab:02}. Note that those indicated as
-'core' modules are shipped with Perl so are likely to be already available.
+The pipeline is available in the github repository located at
+\url{https://github.com/ImperialCollegeLondon/TB-VSA-Pipeline}. The latest
+release can be obtained as a gzip compressed tar file from
+\url{https://github.com/ImperialCollegeLondon/TB-VSA-Pipeline/releases}. Once downloaded, the contents of this can be extracted using the command:
+
+\begin{verbatim}
+tar zxvf downloaded_file.tar.gz
+\end{verbatim}
+
+Alternately, the latest updates to the software can be obtained directly from the git repository by running:
+
+\begin{verbatim}
+git clone https://github.com/ImperialCollegeLondon/TB-VSA-Pipeline
+\end{verbatim}
+
+This will result in the creation of a new directory named 'TB-VSA-Pipeline'. 
+
+\subsubsection{Perl modules}
+
+ Certain perl modules are used by the pipeline, as indicated in table \ref{tab:02}. 
+ Those which are not generally installed along with perl will be downloaded and
+installed into the software installation directory when the {\tt setup.sh} script is
+executed. Should you wish to use other versions of these modules already
+installed on the system, it will be necessary to update the '{\tt use lib}'
+statements in the scripts to include the path to the libraries you wish to use. 
 
 \begin{table}
-{\scriptsize
-\begin{tabularx}{250pt}{@{}ccc@{}}\toprule
+\scriptsize
+\begin{tabularx}{250pt}{@{}lcc@{}}\toprule
 Module & Core? & Notes \\\midrule
 Archive::Zip & No & Only required for download scripts \\
-BioPerl & NO & \\
+BioPerl & No & \\
 Cwd & Yes & \\
 Digest::MD5::File & No & Only required for download scripts  \\
 File::Basename & Yes & \\
+File::Find::Rule & No & \\\
 File::Path & Yes & \\
 FindBin & Yes & \\
 Getopt::Long & Yes & \\
@@ -150,9 +164,65 @@ LWP::UserAgent & No & Only required for download scripts  \\
 Pod::Usage & Yes & \\
 XML::XPath & No & Only required for download scripts \\
 XML::XPath::Parser & No & Only required for download scripts \\\hline
-\end{tabularx}}{}
+\end{tabularx}{}
 \caption{Required Perl modules.\label{tab:02}} 
 \end{table}
+
+\subsubsection {Configuring the software}
+
+Once the software is downloaded, it is necessary to run the {\tt setup.sh}
+script contained in the software installation directory. This script modifies
+the script templates in the {\tt src} directory to set:
+
+\begin{tight_enumerate}
+\item the path to the preferred version of perl. 
+
+\item the number of parallel threads to run. This defaults to the number of available cores on the system where installation is taking place.
+
+\item the name of a PBSPro queue to submit jobs to (optional). The software can
+be run manually without using PBSPro, but will require each sample analysis to
+be run independently.
+
+\item {\tt module load} commands to make the necessary software prerequisites
+available on the default system path (only if installed on the ICL HPC cx1
+cluster) 
+\end{tight_enumerate}
+
+Default values can be selected by pressing {\textbf enter} without inputting
+any data. An example of running the {\tt setup.sh} is shown below:
+
+\begin{verbatim}
+[jamesa@wssb-james TB-VSA_Pipeline]$ ./setup.sh 
+Enter path to perl: [/usr/bin/perl] 
+If this software is to be run on a PBSpro cluster requiring job submission to a particular queue, 
+	enter the desired queue name (enter to skip): med-bio
+Enter number of parallel threads to use: [4] 20
+
+Installing Archive::Zip...
+Installing Digest::MD5::File...
+Installing LWP::UserAgent...
+Installing XML::XPath...
+Installing XML::XPath::Parser...
+
+Updating scripts...
+\end{verbatim}
+
+Once the script has completed, appropriately configured versions of the scripts
+will be available in the {\tt bin} directory of the software installation
+directory. 
+
+To make the scripts available directly on the path of your system (so the
+scripts can be executed by typing their name without having to include the full
+path to the script), it is necessary to modify the .bashrc file located in your
+home directory with the inclusion of the following line:
+
+\begin{verbatim}
+export PATH=/path/to/installation/directory:${PATH}
+\end{verbatim}
+
+where {\tt /path/to/installation/directory} is replaced with the path to the
+location where the software is installed.  It will be necessary to logout and
+login again for this change to take effect. 
 
 \section {Running the Pipeline}
 
@@ -249,9 +319,9 @@ files for each sample.
  \item \textbf{-o}: Path to output directory. The fully-qualified path to a
 directory for storing intermediate run files and outputs in per-sample
 subdirectories. This directory will be created automatically if it doesn't
-exist. 
+exist. \textbf{N.B. The directory name will be used as a project name when reporting outputs}
 \item \textbf{-r}: Path to reference. The fully qualified path to the
-fasta-formatted genome sequence of the reference isolate.
+asta-formatted genome sequence of the reference isolate.
 \end{tight_itemize}
 
 The script will determine the number of samples being analysed by obtaining a
@@ -260,11 +330,21 @@ the cluster for the relevant number of tasks, with one task per sample. The
 progress of these jobs can be monitored using the {\tt qstat -f} command i.e. 
 
 \begin{verbatim}
-TODO: add real qstat -f output
+-bash-4.2$ qstat -f
+Job Id: 4830274[].cx1b
+    Job_Name = analyse_tb_sample
+    Job_Owner = jamesa@login-2-internal.cx1.hpc.ic.ac.uk
+	[truncated for clarity]
+    array_state_count = Queued:8 Running:0 Exiting:0 Expired:0 
+    array_indices_submitted = 1-8
+    array_indices_remaining = 1-8
+    project = _pbs_project_default
 \end{verbatim}
 
-Each task will execute a single instance of the {\tt tb\_pipeline\_run} script,
-which is a queue execution wrapper around {\tt analyse\_tb\_sample}.
+This example {\tt qstat -f} output shows an array of 8 tasks which have been
+submitted, all of which are queued pending execution.  Each task will execute a
+single instance of the {\tt tb\_pipeline\_run} script, which is a queue
+execution wrapper around {\tt analyse\_tb\_sample}.
 
 \subsubsection {Analysing a single sample}
 
@@ -273,7 +353,7 @@ directly e.g for running outside a cluster environment. It's usage is as follows
 
 \begin{verbatim}
 analyse_tb_sample --input input_directory --output output_directory \
-   --reference /path/to/reference.fasta
+   --reference /path/to/reference.fasta [--sample sample_name]
 \end{verbatim}
 
 \begin{tight_itemize}
@@ -286,6 +366,8 @@ subdirectories. This directory will be created automatically if it doesn't
 exist. 
 \item \textbf{-reference}: Path to reference. The fully qualified path to the
 fasta-formatted genome sequence of the reference isolate.
+\item \textbf{--sample}: Sample name to analyse (must match directory name
+containing sample's reads in the input directory) 
 \end{tight_itemize}
 
 Note that the script will refuse to run if an output directory already exists
@@ -323,6 +405,25 @@ from previously failed jobs will be rerun.
 
 This process should be repeated until all samples have successfully completed analysis.
 
+\subsubsection{Identifying outliers}
+
+Outliers can be automatically identified using the {\tt identify\_outliers}
+script. Any samples identified as being overly divergent from the majority of
+the data will have their sample ids written to an {\tt 'outliers.txt'} file in
+the analysis directory. This will be read by subsequent pipeline stages and any
+samples listed in this file excluded from further analysis.
+
+The {\tt identify\_outliers} script requires two arguments:
+
+\begin{verbatim}
+identify_outliers -i /path/to/analysis/dir -r /path/to/reference/seq
+\end{verbatim}
+
+\begin{tight_itemize}
+\item \textbf{-i}: Path to analysis directory (output directory specified during previous job submission)
+\item \textbf{-r}: Path to fasta-format reference sequence
+\end{tight_itemize}
+
 \subsubsection{Generating a variable site alignment}
 
 Once all the tasks have successfully completed, the {\tt build\_vsa} script can
@@ -332,17 +433,17 @@ submit\_build\_vsa} script. Note that when run on the Imperial HPC systems, the
 job should be submitted to cx1's queues.
 
 \begin{Verbatim}
-submit_build_vsa -i /path/to/input/dir -o /path/to/output/dir -r /path/to/reference \
-	-e /patch/to/exclude.bed
+submit_build_vsa -d /path/to/analysis/dir -r /path/to/reference \
+	-e /path/to/exclude.bed -o /path/to/outliers.txt
 \end{Verbatim}
 
 The following arguments should be passed to the {\tt submit\_build\_vsa} script:
 
 \begin{tight_itemize}
-\item \textbf{-i}: Path to input directory specified during job submission
-\item \textbf{-o}: Path to output directory specified during job submission
+\item \textbf{-d}: Path to analysis directory (output directory specified during job submission)
 \item \textbf{-r}: Path to fasta formatted reference sequence
 \item \textbf{-e}: Path to bed format file describing genomic regions to exclude from VSA
+\item \textbf{-o}: Path to text file listing outliers, one sample id per line
 \end{tight_itemize}
 
 The resulting variable site alignment will be written to the output directory
@@ -387,7 +488,7 @@ discarded.
 
 Reads are aligned to the reference genome using the BWA MEM algorithm, using
 default parameters, and the outputs converted to bam format using sambamba.
-Read group information is then added to the bam files to ensure compatibilty
+Read group information is then added to the bam files to ensure compatibility
 with downstream tools such as GATK which require bam files to have read groups
 assigned. This process results in a sorted, indexed bam file which includes a
 {\tt RG} header line describing the read group, and an associated RG tag on
@@ -469,6 +570,33 @@ The parameters used for FreeBayes variant calling are as follows:
 \item \textbf{-F}  : min alternate fraction 0.8 
 \end{tight_itemize}
 
+\subsection{Identifying outliers}
+
+Some samples may not have issues during sequencing, or simply be overly
+divergent from the reference sequence to be sensible included in a variable
+site alignment. These can be automatically identified using the {\tt
+find\_outliers} script. This consolidates per-sample statistics from output
+files in each samples output directory into a single file of samples statistics
+for the whole project, then calls the 'outlier\_plots.R' script to identify
+outliers and produce plots illustrating how these compare to the distribution
+of the full set of samples.
+
+Samples are identified as outliers if
+\begin{tight_itemize}
+\item have less than 20x genomic coverage
+\item have a mapping rate below 90%
+\item have an unusually high number of SNVs identified (>3x the interquartile range)
+\end{tight_itemize}
+
+The distribution of read-count/SNVs and sample/mapping-rate are plotted in PDF
+files (named {\tt projectname\_snv\_dist.pdf} and
+{\tt projectname\_mapping\_rate.pdf}), with identified outliers highlighted and
+labelled with the sample ID. Outliers are also written to a {\tt
+projectname\_outliers.txt} file in the analysis directory, which is read during
+generation of the variable-site alignment and samples listed in it excluded
+from the analysis. Sample IDs can be added to or removed from this file
+manually as required to add or remove outliers from the dataset. 
+
 \subsection{Generating variable-site alignment}
 
 The variable-site alignment is essentially a fasta-format multiple sequence
@@ -496,5 +624,25 @@ corresponding location on the reference genome.
 in the output alignment. This needs to be updated to produce the relevant IUPAC
 ambiguity code in the event that multiple variant bases are identified i.e in a
 non-clonal sample. 
- 
+
+\section {Additional scripts}
+
+The {\tt bin} directory of the software installation includes a number of
+additional scripts which may be helpful in using the pipeline. 
+
+\subsubsection {download\_ena\_project} 
+
+The {\tt download\_ena\_project} script is used to download all the sequence
+reads for a given ENA project, which typically consists of hundreds of files
+which otherwise require downloading independently. It is necessary to provide
+the script with the ID of the ENA project (also referred to as an ENA Study),
+and the path to the directory where the data should be downloaded. The
+downloaded data will be arranged with the sequence read files for each sample
+in a separate subdirectory, named with the sample identifier, as required by
+the sample analysis process. An example of downloading a project is show below:
+
+\begin{verbatim}
+download_ena_project --acc ERP004677 --output reads/PRJEB5280
+\end{verbatim}
+
 \end{document}
